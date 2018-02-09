@@ -44,6 +44,10 @@ $ spm project version [enum('PATCH', 'MINOR', 'MAJOR')] [options...]
 ```shell
 $ spm project detail [options...]
 ```
+* Liste des modules utilisés dans un projet
+```shell
+$ spm project list [options...]
+```
 
 ## Model - Styleguide
 

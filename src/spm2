@@ -9,8 +9,6 @@ Program
 .command('styleguide', 'for actions about styleguides').alias('s')
 .parse(process.argv)
 
-/*
-useful for subcommands :
-{noHelp: true, isDefault: true}
-
-*/
+if (Program.args.length === 0) {
+  Program.help()
+}
