@@ -1,6 +1,6 @@
 let Preferences = require('preferences')
-const CONST = require('../../../libs/const')
-let getSpmAPIToken = require('../libs/authentify').getSpmAPIToken
+const CONST = require('../../../lib/const')
+let getSpmAPIToken = require('../lib/authentify').getSpmAPIToken
 let Prompt = require('inquirer').prompt
 
 /* uses local preferences file to display user information without password */

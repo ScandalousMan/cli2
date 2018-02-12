@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 let Program = require('commander')
 let Actions = require('./models/module')
-let Errors = require('./libs/errors')
+let Errors = require('./lib/errors')
 
 for (let action in Actions){
 	Actions[action](Program).catch(Errors.errorFunc)

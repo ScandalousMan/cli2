@@ -1,6 +1,6 @@
 const Chalk = require('chalk')
 let Preferences = require('preferences')
-const CONST = require('../../../libs/const')
+const CONST = require('../../../lib/const')
 
 /* logouts the user from preferences and clean its information */
 module.exports = (Program) => {

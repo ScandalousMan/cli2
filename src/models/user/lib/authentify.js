@@ -1,9 +1,9 @@
-// let Preferences = require('preferences')
-// let Chalk = require('chalk')
-// let Request = require('request')
-// let Prompt = require('inquirer').prompt
-// let CONST = require('./const')
-// let Spinner = require('./spinner')
+let Preferences = require('preferences')
+let Chalk = require('chalk')
+let Request = require('request')
+let Prompt = require('inquirer').prompt
+let CONST = require('../../../lib/const')
+let Spinner = require('./spinner')
 
 /* used by register & login to request the API and get a user token */
 let getSpmAPIToken = (action, force = false) => {

@@ -1,4 +1,4 @@
-let getSpmAPIToken = require('../libs/authentify').getSpmAPIToken
+let getSpmAPIToken = require('../lib/authentify').getSpmAPIToken
 
 /* uses getSpmAPIToken to register a user and save it in preferences */
 module.exports = (Program) => {
