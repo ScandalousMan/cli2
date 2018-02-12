@@ -1,6 +1,6 @@
 let Preferences = require('preferences')
 const CONST = require('../../../lib/const')
-let getSpmAPIToken = require('../lib/authentify').getSpmAPIToken
+let Authentify = require('../lib/authentify')
 let Prompt = require('inquirer').prompt
 
 /* uses local preferences file to display user information without password */
@@ -18,7 +18,7 @@ module.exports = (Program) => {
           message: 'no user detected, do you want to login ?'
         }])
         .then(answer => {
-          if (answer.authentify) { getSpmAPIToken('login').then(resolve).catch(reject) } else { return resolve() }
+          if (answer.authentify) { Authentify.getSpmAPIToken('login').then(resolve).catch(reject) } else { return resolve() }
         })
         .catch(reject)
       } else {

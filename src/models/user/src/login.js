@@ -1,4 +1,4 @@
-let getSpmAPIToken = require('../lib/authentify').getSpmAPIToken
+let Authentify = require('../lib/authentify')
 
 /* uses getSpmAPIToken to login a user and save it in preferences */
 module.exports = (Program) => {
@@ -9,7 +9,7 @@ module.exports = (Program) => {
   	.description('to authentify yourself')
   	.option('-f, --force', 'to login even if there is already another session up')
   	.action(options => {
-	    getSpmAPIToken('login', options.force)
+	    Authentify.getSpmAPIToken('login', options.force)
 	    .then(resolve)
 	    .catch(reject)
   	})
