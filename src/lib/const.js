@@ -27,7 +27,7 @@ module.exports = {
   ERROR: {
     NO_PACKAGE_SPM: 'you cannot use spm install without any package-spm.json file',
     OUT_OF_SCOPE: 'current directory is out of scope',
-    SPM_PACKAGE_NOT_FOUND: 'package spm is not found in repository',
+    SPM_PROJECT_NOT_FOUND: 'spm project not found in repository',
     ALL_READY_EXIST: 'module all ready exist',
     NO_PACKAGE_IN_MODULE: 'not module in directory',
     NO_SUDO_FOR_GLOBAL: 'need to be exec in sudo for global install',
@@ -39,5 +39,7 @@ module.exports = {
   PACKAGE_ORIGIN_URL: `${BASE_URL}/package-origin`,
   LOGIN_URL: `${BASE_URL}/user`,
   PREFERENCES: 'api.spm-style.com',
-  SEARCH_RESULTS: 20
+  SEARCH_RESULTS: 20,
+  PROJECT_JSON_NAME: 'project-spm.json',
+  MODULE_JSON_NAME: 'module-spm.json'
 }

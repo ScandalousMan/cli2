@@ -6,5 +6,5 @@ let errorFunc = (err) => {
 }
 
 module.exports = {
-	errorFunc
+  errorFunc
 }
