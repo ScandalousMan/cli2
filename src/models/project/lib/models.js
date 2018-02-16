@@ -20,6 +20,7 @@ class Project {
 /* CREATE object */
 class Create {
   constructor (options) {
+    this.initialPath = Common.getCurrentPath()
     let defaultValues = {
       name: Common.getCurrentDirectory(),
       style: 'css',

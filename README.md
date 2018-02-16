@@ -14,7 +14,7 @@ $ spm project create <name> [options...]
 ```
 => génère automatiquement un styleguide sauf si option --no-styleguide ?
 
-creates styleguide.scss + config.js files
+creates styleguide.scss + environment.js files
 creates index.html
 
 * Publier un nouveau projet
@@ -83,7 +83,8 @@ $ spm module create [options...]
 ```
 => options du init original + --flat + --no-css + --no-js + --no-file
 
-creates variables-spm.scss + const-spm.js for instance variables
+creates variables-spm.css + const-spm.js for instance variables
+name.[extension]
 creates style.scss, script.js & index.html + balises
 links variables-spm.scss to project styleguide if found
 no index.html if project found

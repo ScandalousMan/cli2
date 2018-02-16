@@ -3,12 +3,31 @@ let Clear = require('clear')
 let Chalk = require('chalk')
 let Figlet = require('figlet')
 let Common = require('../../../lib/common')
-let Model = require('../lib/model')
+let Models = require('../lib/models')
 let CONST = require('../../../lib/const')
 let Debug = require('../../../lib/debug')
 
+/* Detect if already in the scope of a project */
+let testProjectScopePromise = (create) => {
+  if (create.debug) { Debug() }
+  return new Promise((resolve, reject) => {
+    Common.findProjectJsonPromise(create.initialPath)
+    .then(path => {
+      if (!path) {
+        create.path = create.initialPath
+        return resolve(create)
+      } else {
+        if (!create.force) { return reject(new Error(`cannot create project in another project's scope - found at ${path}`)) }
+        create.path = path
+        return resolve(create)
+      }
+    })
+    .catch(reject)
+  })
+}
+
 /* Prompter asking for basic information for package creation */
-let createProject = (create) => {
+let createProjectPromise = (create) => {
   if (create.debug) { Debug() }
   return new Promise((resolve, reject) => {
     let questionObj = {
@@ -86,10 +105,10 @@ let createProject = (create) => {
 let recapAndConfirmPromise = (create) => {
   if (create.debug) { Debug() }
   return new Promise((resolve, reject) => {
-    let project = new Model.Project(create)
+    let project = new Models.Project(create)
     create.json = project
     if (!create.default) {
-      console.log('About to write to ' + Common.getCurrentPath() + '/project-spm.json')
+      console.log(`About to write to ${create.path}/project-spm.json`)
       console.log(JSON.stringify(project, null, '  '))
       Common.promptConfirmation(project, true)
       .then(() => resolve(create))
@@ -98,7 +117,7 @@ let recapAndConfirmPromise = (create) => {
   })
 }
 
-/* Calls entry, variables and dom checkers */
+/* creates the project files */
 let createProjectFilePromise = (create) => {
   if (create.debug) { Debug(create) }
   return new Promise((resolve, reject) => {
@@ -149,7 +168,7 @@ let createProjectFilePromise = (create) => {
     let promises = []
     for (let file of filesToCreate) {
       if (file.toCreate) {
-        promises.push(Common.writeFilePromise(file.name, file.content, create, file.toForce))
+        promises.push(Common.writeFilePromise(`${create.path}/${file.name}`, file.content, create, file.toForce))
       } else {
         create.warnings.push(`file ${file.name} not created as requested`)
       }
@@ -174,17 +193,18 @@ module.exports = (Program) => {
     .option('--ss-name <ssFile>', `to configure the project's stylesheet file`)
     .option('--styleguide-name <styleguideFile>', `to configure the project's styleguide file`)
     .option('--description <description>', `to configure the project's description`)
-    .option('--default', 'to create the project with default values')
     .option('--no-ss-file', 'to prevent creating the spm stylesheet')
     .option('--no-styleguide-file', 'to prevent creating the spm styleguide')
     .option('--no-js-file', 'to prevent creating the spm javascript file')
     .option('--no-html-file', 'to prevent creating the spm html file')
     .option('--no-file', 'to prevent creating any spm file but the json package-spm')
-    .option('-f, --force', 'to replace current project-spm.json file if it exists')
+    .option('--default', 'to create the project with default values')
+    .option('--force', 'to replace current project-spm.json file if it exists')
     .option('--debug', 'to display debug logs')
     .action(options => {
-      let create = new Model.Create(options)
-      createProject(create)
+      let create = new Models.Create(options)
+      testProjectScopePromise(create)
+      .then(createProjectPromise)
       .then(recapAndConfirmPromise)
       .then(createProjectFilePromise)
       .then(Common.displayMessagesPromise)

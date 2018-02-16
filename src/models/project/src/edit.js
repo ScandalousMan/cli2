@@ -3,24 +3,6 @@ let Common = require('../../../lib/common')
 let CONST = require('../../../lib/const')
 let Debug = require('../../../lib/debug')
 
-/* transforms list with ', ' into array */
-let arrayTransformer = (str) => {
-  return str.split(', ')
-}
-
-/* transforms a string into an array of results */
-let optionList = (str) => {
-  let res = []
-  if (str) {
-    for (let item of str.split(',')) {
-      for (let subItem of item.split(' ')) {
-        if (subItem.length) { res.push(subItem) }
-      }
-    }
-  }
-  return res
-}
-
 /* transforms a list of object's path into a camel case name */
 let toCamelCase = (str) => {
   let res = ''
@@ -41,8 +23,8 @@ let recursivePropertiesAdderPromise = (obj, table = [], path = '') => {
         promises.push(recursivePropertiesAdderPromise(obj[key], table, path.length ? `${path}*${key}` : key))
       } else {
         let valuePath = path.length ? `${path}*${key}` : key
-        let question = { name: valuePath, message: `value of ${toCamelCase(valuePath)}`, default: obj[key] instanceof Array ? obj[key].join(', ') : obj[key] }
-        if (obj[key] instanceof Array) { question.transformer = arrayTransformer }
+        let question = { name: valuePath, message: toCamelCase(valuePath), default: obj[key] instanceof Array ? obj[key].join(', ') : obj[key] }
+        if (obj[key] instanceof Array) { question.filter = Common.optionList }
         promises.push(question)
       }
     }
@@ -56,7 +38,7 @@ let recursivePropertiesAdderPromise = (obj, table = [], path = '') => {
   })
 }
 
-/*  */
+/* parse project json file */
 let getProjectJsonPromise = (edit) => {
   if (edit.options.debug) { Debug() }
   return new Promise((resolve, reject) => {
@@ -74,7 +56,7 @@ let getProjectJsonPromise = (edit) => {
   })
 }
 
-/*  */
+/* modify project-spm.json variables */
 let modifyVariableJsonPromise = (edit) => {
   if (edit.options.debug) { Debug(edit.options) }
   return new Promise((resolve, reject) => {
@@ -106,10 +88,10 @@ let modifyVariableJsonPromise = (edit) => {
           styleguide: optionsToChange.styleguideName || edit.json.files.styleguide
         },
         description: optionsToChange.description || edit.json.description,
-        dependencies: optionsToChange.dependencies || edit.json.dependencies
+        dependencies: edit.json.dependencies
       }
       return resolve(edit)
-    } else if (edit.options.dependenciesRm.length) {
+    } else if (edit.options.dependenciesRm && edit.options.dependenciesRm.length) {
       for (let dependency of edit.options.dependenciesRm) {
         if (edit.json.dependencies[dependency]) {
           delete edit.json.dependencies[dependency]
@@ -122,7 +104,6 @@ let modifyVariableJsonPromise = (edit) => {
     } else {
       recursivePropertiesAdderPromise(edit.json)
       .then(questions => {
-        console.log(questions)
         Prompt(questions)
         .then(answer => {
           for (let key in answer) {
@@ -131,7 +112,6 @@ let modifyVariableJsonPromise = (edit) => {
             for (let i = 0; i < keySplit.length; i++) {
               if (i === keySplit.length - 1) {
                 if (obj[keySplit[i]] !== answer[key]) {
-                  console.log('on ajoute')
                   obj[keySplit[i]] = answer[key]
                   edit.successes.push(`project's key ${toCamelCase(key)} successfully updated to ${answer[key]}`)
                 }
@@ -162,7 +142,7 @@ module.exports = (Program) => {
     .option('--js-name <jsFile>', `to configure the project's javascript file`)
     .option('--ss-name <ssFile>', `to configure the project's stylesheet file`)
     .option('--styleguide-name <styleguideFile>', `to configure the project's styleguide file`)
-    .option('--dependencies-rm <dependencies>', 'to configure the project dependencies', optionList)
+    .option('--dependencies-rm <dependencies>', 'to configure the project dependencies', Common.optionList)
     .option('--description <description>', `to configure the project's description`)
     .option('--debug', 'to display debug logs')
     .action(options => {

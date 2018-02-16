@@ -2,9 +2,11 @@ let Standard = require('standard')
 let expect = require('chai').expect
 const util = require('util')
 
+let dir = process.cwd()
+
 let importTest = (name, path) => {
   describe(name, function () {
-    require(path)
+    require(path)(dir)
   })
 }
 
@@ -28,3 +30,4 @@ describe('Standard', () => {
 /* importing all the test categories */
 importTest('model USER', './models/USER/test')
 importTest('model PROJECT', './models/PROJECT/test')
+importTest('model MODULE', './models/MODULE/test')

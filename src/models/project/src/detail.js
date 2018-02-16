@@ -12,6 +12,7 @@ module.exports = (Program) => {
     .action(options => {
       Common.findProjectJsonPromise(Common.getCurrentPath())
       .then(path => {
+        if (!path) { return reject(new Error(CONST.ERROR.SPM_PROJECT_NOT_FOUND)) }
         Fs.readFile(`${path}/${CONST.PROJECT_JSON_NAME}`, 'utf8', (err, data) => {
           if (err) { return reject(err) }
           console.log(data)

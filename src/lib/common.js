@@ -8,6 +8,20 @@ let CONST = require('./const')
 let Sass = require('node-sass')
 const SCSS_IGNORED_CHARS = [' ', '\n', '\t']
 
+/* transforms a string into an array of results */
+let optionList = (str) => {
+  let res = []
+  console.log('str', str)
+  if (str && typeof str === 'string') {
+    for (let item of str.split(',')) {
+      for (let subItem of item.split(' ')) {
+        if (subItem.length) { res.push(subItem) }
+      }
+    }
+  }
+  return res
+}
+
 /* returns process' path */
 let getCurrentPath = () => {
   return process.cwd()
@@ -30,14 +44,34 @@ let writeFilePromise = (target, data, conf = {}, force = false) => {
   })
 }
 
-/* find project-spm.json and resolve its path */
+/* find json file and resolves its path - null if not found */
+let findJsonPromise = (currentDirectory, file) => {
+  return new Promise((resolve, reject) => {
+    if (!currentDirectory || currentDirectory.indexOf(CONST.USER_DIRECTORY) === -1) { return resolve(null) }
+    Fs.access(`${currentDirectory}/${file}`, Fs.constants.F_OK, err => {
+      if (err) {
+        findJsonPromise(currentDirectory.substring(0, currentDirectory.lastIndexOf('/')), file).then(resolve).catch(reject)
+      } else {
+        return resolve(currentDirectory)
+      }
+    })
+  })
+}
+/* find project-spm.json and resolve its path - null if not found */
 let findProjectJsonPromise = (currentDirectory) => {
   return new Promise((resolve, reject) => {
-    if (!currentDirectory || currentDirectory.indexOf(CONST.USER_DIRECTORY) === -1) { return reject(new Error(CONST.ERROR.OUT_OF_SCOPE)) }
-    Fs.access(`${currentDirectory}/${CONST.PROJECT_JSON_NAME}`, Fs.constants.F_OK, err => {
-      if (err) { findProjectJsonPromise(currentDirectory.substring(0, currentDirectory.lastIndexOf('/'))).then(resolve).catch(reject) }
-      return resolve(currentDirectory)
-    })
+    findJsonPromise(currentDirectory, CONST.PROJECT_JSON_NAME)
+    .then(resolve)
+    .catch(reject)
+  })
+}
+
+/* find module-spm.json and resolve its path - null if not found */
+let findModuleJsonPromise = (currentDirectory) => {
+  return new Promise((resolve, reject) => {
+    findJsonPromise(currentDirectory, CONST.MODULE_JSON_NAME)
+    .then(resolve)
+    .catch(reject)
   })
 }
 
@@ -50,8 +84,6 @@ let getJsonFilePromise = (filePath) => { // old name getPackageSpmFilePromise
     })
   })
 }
-
-/**/
 
 /* downloads packages from spm registry */
 let downloadModuleSpmPromise = (name, version, targetPath) => {
@@ -180,10 +212,10 @@ let getCurrentDirectory = () => {
 }
 
 /* Ensures a folder and its content is deleted - mimics rm -r */
-let deleteFolderRecursivePromise = (path) => {
+let deleteFolderRecursivePromise = (path, ignoreENOENT = false) => {
   return new Promise((resolve, reject) => {
     Fs.lstat(path, (err, stats) => {
-      if (err) { return reject(err) }
+      if (err && (!ignoreENOENT || err.code !== 'ENOENT')) { return reject(err) } else if (err && err.code === 'ENOENT') { return resolve(path) }
       if (stats.isDirectory()) {
         Fs.readdir(path, (err, files) => {
           if (err) { return reject(err) }
@@ -243,6 +275,26 @@ let directoryExists = (filePath) => {
   } catch (err) {
     return false
   }
+}
+
+/* directory checker as a promise */
+// let directoryExistsPromise = (filePath) => {
+//   return new Promise((resolve, reject) => {
+//     Fs.lstat(filePath, (err, stats) => {
+//       if (err && err.code !== 'ENOENT') { return reject(err) } else if (err) { return resolve(false) }
+//       return resolve(stats.isDirectory())
+//     })
+//   })
+// }
+
+/* file checker as a promise */
+let fileExistsPromise = (filePath) => {
+  return new Promise((resolve, reject) => {
+    Fs.access(filePath, Fs.constants.F_OK, err => {
+      if (err && err.code !== 'ENOENT') { return reject(err) } else if (err) { return resolve(false) }
+      return resolve(true)
+    })
+  })
 }
 
 /* Path.relative cannot compute relative path between unexisting files */
@@ -715,5 +767,8 @@ module.exports = {
   createSymlinkPromise,
   updateRegistryModulesPromise,
   // new
-  findProjectJsonPromise
+  findProjectJsonPromise,
+  findModuleJsonPromise,
+  optionList,
+  fileExistsPromise
 }

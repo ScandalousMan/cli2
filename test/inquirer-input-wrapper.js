@@ -3,7 +3,7 @@ let EventEmitter = require('events').EventEmitter
 let sinon = require('sinon')
 let util = require('util')
 let _ = require('lodash')
-let rewire = require('rewire')
+let rewire = require('rewire') // require returns the same instance of js code every time. use rewire to create new and INDEPENDANT instance
 
 let stub = {}
 

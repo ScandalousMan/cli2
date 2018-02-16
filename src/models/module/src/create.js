@@ -1,184 +1,204 @@
-let Prompt = require('inquirer').prompt
+let Fs = require('fs')
 let Clear = require('clear')
 let Chalk = require('chalk')
 let Figlet = require('figlet')
-let Fs = require('fs')
-let Common = require('./common')
-let PackageSpm = require('./models').PackageSpm
-let CONST = require('./const')
-let Debug = require('./debug')
-let Preferences = require('preferences')
+let Prompt = require('inquirer').prompt
+let Common = require('../../../lib/common')
+let CONST = require('../../../lib/const')
+let Debug = require('../../../lib/debug')
+let Models = require('../lib/models')
+
+/* Detect if in the scope of a project */
+let testProjectScopePromise = (create) => {
+  return new Promise((resolve, reject) => {
+    Common.findProjectJsonPromise(create.initialPath)
+    .then(path => {
+      create.projectPath = path
+      if (create.options.htmlName) { return reject(new Error(`cannot create any html file in native modules located inside spm projects`)) }
+      return resolve(create)
+    })
+    .catch(reject)
+  })
+}
 
 /* Prompter asking for basic information for package creation */
-let createPackageSpm = (nopublish, debug) => {
-  if (debug) { Debug() }
+let createModulePromise = (create) => {
+  if (create.debug) { Debug() }
   return new Promise((resolve, reject) => {
-    Clear()
-    console.log(
-      Chalk.hex('#DF5333')(
-        Figlet.textSync('spm', {horizontalLayout: 'full'})
-      )
-    )
-    let questions = [
-      {
-        name: 'name',
-        message: 'module name',
-        default: Common.getCurrentDirectory(),
-        /* spm names are never shorter than 3 characters */
-        validate: (value) => {
-          return (value.length && value.length > 2) ? true : Chalk.hex(CONST.WARNING_COLOR)('use at least 3 characters')
-        }
-      },
-      {
+    let questionObj = {
+      version: {
         name: 'version',
-        default: '1.0.0',
-        message: 'version:',
+        message: 'version',
+        default: create.version,
         /* all versions are formatted as x1.x2.x3 with xi positive or null integers */
         validate: (value) => {
           return /^[0-9]+[.][0-9]+[.][0-9]+$/.test(value) ? true : Chalk.hex(CONST.WARNING_COLOR)('Please enter a valid version number')
         }
       },
-      {
-        type: 'list',
+      style: {
         name: 'style',
-        choices: ['css', 'scss'], // + 'sass', 'less'
-        default: 'scss',
-        message: 'default style:'
+        message: 'style',
+        type: 'list',
+        choices: ['css', 'scss'],
+        default: create.style
       },
-      {
-        name: 'category',
-        message: `project's category`
+      mainClass: {
+        name: 'mainClass',
+        message: 'main class',
+        default: create.mainClass,
+        /* spm names are never shorter than 2 characters */
+        validate: (value) => {
+          return (value.length && value.length > 1) ? true : Chalk.hex(CONST.WARNING_COLOR)('use at least 2 characters')
+        }
       },
-      // {
-      //  type: 'list',
-      //  name: 'type',
-      //  choices: ['native', 'component', 'template'],
-      //  default: 'native',
-      //  message: 'type:'
-      // },
-      {
-        name: 'main',
-        /* by default, the main class has the same name as the project's */
-        default: (current) => {
-          return current.name
-        },
-        message: 'main class in your module'
+      description: {
+        name: 'description',
+        message: 'description'
       },
-      {
-        name: 'classes',
-        message: 'other classes in your module'
+      htmlName: {
+        name: 'htmlName',
+        default: create.htmlName,
+        message: `module's main html file`
       },
-      {
-        name: 'entry',
+      ssName: {
+        name: 'ssName',
         /* the entry point by default is index with the project's style extension */
         default: (current) => {
-          return `index.${current.style}`
+          return current.style ? `${create.name}.${current.style}` : create.ssName
         },
-        message: 'entry point:'
+        message: `module's main stylesheet`
       },
-      {
-        name: 'variables',
-        message: 'variables:'
+      jsName: {
+        name: 'jsName',
+        default: create.jsName,
+        message: `module's main script`
       },
-      {
-        name: 'author',
-        default: new Preferences(CONST.PREFERENCES).user || 'anonymous',
-        message: 'author:'
-      },
-      {
-        name: 'repository',
-        message: 'repository:'
-      },
-      {
-        name: 'readme',
-        default: 'README.md',
-        message: 'readme:'
-      },
-      {
-        name: 'contributors',
-        message: 'contributors:'
-      },
-      {
+      license: {
         name: 'license',
-        default: 'IST',
-        message: 'license:'
+        message: 'license',
+        default: create.license
       },
-      {
+      keywords: {
         name: 'keywords',
-        message: 'keywords:'
+        message: 'keywords',
+        default: create.keywords.join(', '),
+        filter: Common.optionList
       },
-      {
-        name: 'description',
-        message: 'description:'
+      classes: {
+        name: 'classes',
+        message: 'classes',
+        default: create.classes.join(', '),
+        filter: Common.optionList
       }
-    ]
-    Prompt(questions)
+    }
+    let questions = []
+    for (let key of create.getKeys()) {
+      if (typeof create.options[key] === 'function' || !create.options[key]) {
+        if (key !== 'htmlName' || !create.projectPath) { questions.push(questionObj[key]) }
+      }
+    }
+    if (questions.length && !create.default) {
+      Clear()
+      console.log(
+        Chalk.hex('#FD7F57')(
+          Figlet.textSync('spm', {horizontalLayout: 'full'})
+        )
+      )
+      Prompt(questions)
       .then(answer => {
-        let packageSpm = new PackageSpm(answer, nopublish, debug)
-        console.log('About to write to ' + Common.getCurrentPath() + '/package-spm.json')
-        console.log(JSON.stringify(packageSpm, null, '  '))
-        return resolve(packageSpm)
+        for (let key in answer) { create[key] = answer[key] }
+        return resolve(create)
       })
       .catch(err => { return reject(new Error(`Prompt error - ${err}`)) })
+    } else { return resolve(create) }
   })
 }
 
-/* Checks if entry file exists and creates it if not */
-let initEntryCheck = (packageSpm) => {
-  if (packageSpm.debug) { Debug() }
+/* displays the complete package and asks user's confirmation */
+let recapAndConfirmPromise = (create) => {
+  if (create.debug) { Debug() }
   return new Promise((resolve, reject) => {
-    if (!Fs.existsSync(packageSpm.entry)) {
-      Common.writeContent(`@import 'variables-spm.${packageSpm.style}';\n`, packageSpm.entry)
-      .then(() => { packageSpm.successes.push(`${packageSpm.entry} has been successfully created`); return resolve(packageSpm) })
+    let module = new Models.Module(create)
+    create.json = module
+    if (!create.default) {
+      console.log(`About to write to ${create.path}/module-spm.json`)
+      console.log(JSON.stringify(module, null, '  '))
+      Common.promptConfirmation(module, true)
+      .then(() => resolve(create))
       .catch(reject)
+    } else { return resolve(create) }
+  })
+}
+
+/* creates the module directory if not flat */
+let createFolderPromise = (create) => {
+  return new Promise((resolve, reject) => {
+    if (!create.flat) {
+      Fs.mkdir(`${create.initialPath}/${create.name}`, err => {
+        if (err) { return reject(err) }
+        create.successes.push(`folder ${create.name} successfully created`)
+        create.path = `${create.initialPath}/${create.name}`
+        return resolve(create)
+      })
     } else {
-      packageSpm.warnings.push(`${packageSpm.entry} not created, make sure you import spm variables-spm.${packageSpm.style} file in your project`)
-      return resolve(packageSpm)
+      create.path = create.initialPath
+      return resolve(create)
     }
   })
 }
 
-/* Checks if the variables-spm file exists and creates it if not */
-let initVariablesCheck = (packageSpm) => {
-  if (packageSpm.debug) { Debug() }
+/* creates the module files */
+let createModuleFilePromise = (create) => {
+  if (create.debug) { Debug(create) }
   return new Promise((resolve, reject) => {
-    if (!Fs.existsSync(`variables-spm.${packageSpm.style}`)) {
-      let content = packageSpm.style === 'css' ? ':root{\n/*\n' : ''
-      for (let instanceVariable of packageSpm.variables) { content = `${content}${packageSpm.style === 'css' ? '\t--' : '// $'}_${instanceVariable}: ;\n` }
-      if (packageSpm.style === 'css') { content += '*/\n}\n' }
-      Common.writeContent(content, `variables-spm.${packageSpm.style}`)
-      .then(() => { packageSpm.successes.push(`variables-spm.${packageSpm.style} has been successfully created`); return resolve(packageSpm) })
-      .catch(reject)
-    } else {
-      packageSpm.warnings.push(`variables-spm.${packageSpm.style} file already in your project`)
-      return resolve(packageSpm)
+    let filesToCreate = [
+      {
+        name: 'module-spm.json',
+        toCreate: true,
+        toForce: create.force,
+        content: JSON.stringify(create.json, null, '  ')
+      },
+      {
+        name: create.htmlName,
+        toCreate: create.options.htmlFile || create.projectPath,
+        toForce: false,
+        content: ''
+      },
+      {
+        name: create.jsName,
+        toCreate: create.options.jsFile,
+        toForce: false,
+        content: ''
+      },
+      {
+        name: create.ssName,
+        toCreate: create.options.ssFile,
+        toForce: false,
+        content: ''
+      },
+      {
+        name: `variables-spm.${create.style}`,
+        toCreate: true,
+        toForce: false,
+        content: ''
+      },
+      {
+        name: `const-spm.js`,
+        toCreate: true,
+        toForce: false,
+        content: ''
+      }
+    ]
+    let promises = []
+    for (let file of filesToCreate) {
+      if (file.toCreate) {
+        promises.push(Common.writeFilePromise(create.flat ? file.name : `${create.name}/${file.name}`, file.content, create, file.toForce))
+      } else {
+        create.warnings.push(`file ${file.name} not created as requested`)
+      }
     }
-  })
-}
-
-/* Checks if the reference dome file exists and creates it if not - only for custom dom */
-let initSpmDom = (packageSpm) => {
-  if (packageSpm.debug) { Debug() }
-  return new Promise((resolve, reject) => {
-    if (!packageSpm.nopublish && !Fs.existsSync('ref-dom.html')) {
-      Common.writeContent(`\n`, 'ref-dom.html')
-      .then(() => { packageSpm.successes.push('ref-dom.html has been successfully created'); return resolve(packageSpm) })
-      .catch(reject)
-    } else {
-      if (!packageSpm.nopublish) { packageSpm.warnings.push('ref-dom.html file already in your project') }
-      return resolve(packageSpm)
-    }
-  })
-}
-
-/* Calls entry, variables and dom checkers */
-let createSpmFiles = (packageSpm) => {
-  if (packageSpm.debug) { Debug() }
-  return new Promise((resolve, reject) => {
-    initEntryCheck(packageSpm)
-    .then(initVariablesCheck)
-    .then(initSpmDom)
-    .then(resolve)
+    Promise.all(promises)
+    .then(() => resolve(create))
     .catch(reject)
   })
 }
@@ -189,34 +209,50 @@ module.exports = (Program) => {
     Program
     .command('create')
     .alias('c')
-    .description(`to create a new spm module with its core files`)
+    .description(`to create a new spm module with its core files, name should be at least 2 chars long`)
+    .arguments('<name>', 'name should be longer than 2 characters')
+    .option('--version <version>', `to configure the module's version`)
+    .option('--style <style>', `to configure the module's style`)
+    .option('--main-class <mainClass>', `to configure the module's main class`)
+    .option('--description <description>', `to configure the module's description`)
+    .option('--license <license>', `to configure the module's license`)
+    .option('--keywords <keywords>', `to configure the module's keywords`, Common.optionList, [])
+    .option('--classes <classes>', `to configure the module's classes`, Common.optionList, []) // détection automatique ?
+    .option('--html-name <htmlName>', `to configure the html file's name`)
+    .option('--ss-name <ssName>', `to configure the stylesheet's name`)
+    .option('--js-name <jsName>', `to configure the javascript file's name`)
+    .option('--no-html-file', `to prevent from creating the spm html file`)
+    .option('--no-ss-file', 'to prevent from creating the spm stylesheet')
+    .option('--no-js-file', 'to prevent from creating the spm javascript file')
+    .option('--no-file', 'to prevent creating any spm file but the module-spm.json')
     .option('--flat', 'to create the file in current directory')
-    .option('--no-css', 'to prevent creating the spm stylesheet')
-    .option('--no-js', 'to prevent creating the spm javascript file')
-    .option('--no-file', 'to prevent creating any spm file but the json package-spm')
-    // add all inquirer questions as options
+    .option('--default', 'to create the module with default values')
+    .option('--force', 'to erase the existing module-spm.json file')
     .option('--debug', 'to display debug logs')
-    .action((options) => {
-      createPackageSpm(options.nopublish, options.debug)
-      .then(packageSpm => Common.promptConfirmation(packageSpm, true))
-      .then(createSpmFiles)
-      .then(res => {
-        let finalPackage = JSON.parse(JSON.stringify(res))
-        delete finalPackage.successes
-        delete finalPackage.warnings
-        delete finalPackage.errors
-        delete finalPackage.debug
-        delete finalPackage.nopublish
-        return Common.writeContent(JSON.stringify(finalPackage, null, '  ') + '\n', 'package-spm.json', '', res)
-      })
-      .then(res => {
-        return new Promise((resolve, reject) => {
-          res.successes.push('package-spm.json has been successfully created')
-          return resolve(res)
+    .action((name, options) => {
+      if (!/^.{2,}$/.test(name) || name === 'spm_modules') {
+        Program.on('--help', () => { console.log(Chalk.hex(CONST.WARNING_COLOR)('name should be longer than 2 characters (value spm_modules forbidden)')) })
+        Program.help()
+        return reject(new Error('name should be longer than 2 characters'))
+      } else if (options.version && typeof options.version !== 'function' && !/^[0-9]+[.][0-9]+[.][0-9]+$/.test(options.version)) {
+        Program.on('--help', () => { console.log(Chalk.hex(CONST.WARNING_COLOR)('please enter a valid version number (x.x.x)')) })
+        Program.help()
+      } else {
+        let create = new Models.Create(name, options)
+        Common.fileExistsPromise(`${create.initialPath}/${name}`)
+        .then(doesExist => {
+          if (doesExist && !options.flat && !options.force) { return reject(new Error(`directory ${name} already exist in current folder - remove it or use option --force`)) }
+          testProjectScopePromise(create)
+          .then(createModulePromise)
+          .then(createFolderPromise)
+          .then(recapAndConfirmPromise)
+          .then(createModuleFilePromise)
+          .then(Common.displayMessagesPromise)
+          .then(resolve)
+          .catch(reject)
         })
-      })
-      .then(Common.displayMessagesPromise)
-      .catch(reject)
+        .catch(reject)
+      }
     })
   })
 }
