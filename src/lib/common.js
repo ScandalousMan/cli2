@@ -8,10 +8,18 @@ let CONST = require('./const')
 let Sass = require('node-sass')
 const SCSS_IGNORED_CHARS = [' ', '\n', '\t']
 
+/* checks if a responsiveness array is correct */
+let checkCorrectResponsiveness = (responsiveness) => {
+  const devices = ['watch', 'mobile', 'phablet', 'tablet', 'laptop', 'screenXl']
+  for (let item of responsiveness) {
+    if (!devices.includes(item)) { return false }
+  }
+  return true
+}
+
 /* transforms a string into an array of results */
 let optionList = (str) => {
   let res = []
-  console.log('str', str)
   if (str && typeof str === 'string') {
     for (let item of str.split(',')) {
       for (let subItem of item.split(' ')) {
@@ -45,12 +53,12 @@ let writeFilePromise = (target, data, conf = {}, force = false) => {
 }
 
 /* find json file and resolves its path - null if not found */
-let findJsonPromise = (currentDirectory, file) => {
+let findJsonPromise = (currentDirectory, file, stopDirectory) => {
   return new Promise((resolve, reject) => {
-    if (!currentDirectory || currentDirectory.indexOf(CONST.USER_DIRECTORY) === -1) { return resolve(null) }
+    if (!currentDirectory || currentDirectory.indexOf(stopDirectory) === -1) { return resolve(null) }
     Fs.access(`${currentDirectory}/${file}`, Fs.constants.F_OK, err => {
       if (err) {
-        findJsonPromise(currentDirectory.substring(0, currentDirectory.lastIndexOf('/')), file).then(resolve).catch(reject)
+        findJsonPromise(currentDirectory.substring(0, currentDirectory.lastIndexOf('/')), file, stopDirectory).then(resolve).catch(reject)
       } else {
         return resolve(currentDirectory)
       }
@@ -58,18 +66,18 @@ let findJsonPromise = (currentDirectory, file) => {
   })
 }
 /* find project-spm.json and resolve its path - null if not found */
-let findProjectJsonPromise = (currentDirectory) => {
+let findProjectJsonPromise = (currentDirectory, stopDirectory = CONST.USER_DIRECTORY) => {
   return new Promise((resolve, reject) => {
-    findJsonPromise(currentDirectory, CONST.PROJECT_JSON_NAME)
+    findJsonPromise(currentDirectory, CONST.PROJECT_JSON_NAME, stopDirectory)
     .then(resolve)
     .catch(reject)
   })
 }
 
 /* find module-spm.json and resolve its path - null if not found */
-let findModuleJsonPromise = (currentDirectory) => {
+let findModuleJsonPromise = (currentDirectory, stopDirectory = CONST.USER_DIRECTORY) => {
   return new Promise((resolve, reject) => {
-    findJsonPromise(currentDirectory, CONST.MODULE_JSON_NAME)
+    findJsonPromise(currentDirectory, CONST.MODULE_JSON_NAME, stopDirectory)
     .then(resolve)
     .catch(reject)
   })
@@ -770,5 +778,6 @@ module.exports = {
   findProjectJsonPromise,
   findModuleJsonPromise,
   optionList,
-  fileExistsPromise
+  fileExistsPromise,
+  checkCorrectResponsiveness
 }

@@ -1,3 +1,4 @@
+let Chalk = require('chalk')
 let Prompt = require('inquirer').prompt
 let Preferences = require('preferences')
 let Common = require('../../../lib/common')
@@ -49,7 +50,6 @@ let toCamelCase = (str) => {
 let recursivePropertiesAdderPromise = (obj, table = [], path = '') => {
   return new Promise((resolve, reject) => {
     let promises = []
-    console.log(obj)
     if (!Object.keys(obj).length) { return resolve(table) }
     for (let key in obj) {
       if (typeof obj[key] === 'object') {
@@ -73,7 +73,7 @@ let recursivePropertiesAdderPromise = (obj, table = [], path = '') => {
 
 /*  */
 let modifyVariableJsonPromise = (edit) => {
-  if (edit.options.debug) { Debug() }
+  if (edit.options.debug) { Debug(edit.options.description === '') }
   return new Promise((resolve, reject) => {
     let optionsToChange = {}
     const optionsMap = {
@@ -81,16 +81,20 @@ let modifyVariableJsonPromise = (edit) => {
       version: 'version',
       style: 'style',
       mainClass: 'mainClass',
+      description: 'description',
+      category: 'category',
+      responsive: 'responsive',
+      keywords: 'keywords',
       htmlName: 'indexFile',
       jsName: 'scriptFile',
       ssName: 'styleFile',
-      description: 'description',
-      license: 'license',
-      keywords: 'keywords',
-      classes: 'classes'
+      classes: 'classes',
+      readme: 'readme',
+      repository: 'repository',
+      license: 'license'
     }
     for (let option in optionsMap) {
-      if (edit.options[option] && typeof edit.options[option] !== 'function') {
+      if (edit.options[option] !== undefined && typeof edit.options[option] !== 'function') {
         optionsToChange[option] = edit.options[option]
         edit.successes.push(`module's key ${optionsMap[option]} successfully updated to ${edit.options[option]}`)
       }
@@ -99,21 +103,25 @@ let modifyVariableJsonPromise = (edit) => {
       edit.json = {
         name: optionsToChange.name || edit.json.name,
         version: optionsToChange.version || edit.json.version,
+        author: edit.json.author || new Preferences(CONST.PREFERENCES).user,
         style: optionsToChange.style || edit.json.style,
         type: 'native',
-        author: edit.json.author || new Preferences(CONST.PREFERENCES).user,
         mainClass: optionsToChange.mainClass || edit.json.mainClass,
+        description: optionsToChange.description !== undefined ? optionsToChange.description : edit.json.description,
+        category: optionsToChange.category !== undefined ? optionsToChange.category : edit.json.category,
+        responsive: optionsToChange.responsive !== undefined ? optionsToChange.responsive : edit.json.responsive,
+        keywords: optionsToChange.keywords || edit.json.keywords,
+        dependencies: edit.json.dependencies,
         files: {
           index: optionsToChange.htmlName || edit.json.files.index,
           script: optionsToChange.jsName || edit.json.files.script,
           style: optionsToChange.ssName || edit.json.files.style
         },
         classes: optionsToChange.classes || edit.json.classes,
-        description: optionsToChange.description || edit.json.description,
-        license: optionsToChange.license || edit.json.license,
-        keywords: optionsToChange.keywords || edit.json.keywords,
-        contributors: edit.json.contributors,
-        dependencies: edit.json.dependencies
+        readme: optionsToChange.readme !== undefined ? optionsToChange.readme : edit.json.readme,
+        repository: optionsToChange.repository !== undefined ? optionsToChange.repository : edit.json.repository,
+        license: optionsToChange.license !== undefined ? optionsToChange.license : edit.json.license,
+        contributors: edit.json.contributors
       }
       return resolve(edit)
     } else if (edit.options.dependenciesRm && edit.options.dependenciesRm.length) {
@@ -165,35 +173,51 @@ module.exports = (Program) => {
     .option('--version <version>', `to configure the module's version`)
     .option('--style <style>', `to configure the module's style`)
     .option('--main-class <mainClass>', `to configure the module's main class`)
+    .option('--description <description>', `to configure the module's description`)
+    .option('--category <category>', `to configure the modules's category`)
+    .option('--responsive <devices>', `to configure the modules's devices`, Common.optionList)
+    .option('--keywords <keywords>', `to configure the module's keywords`, Common.optionList)
+    .option('--dependencies-rm <dependencies>', 'to configure the module dependencies', Common.optionList)
     .option('--html-name <htmlFile>', `to configure the module's html file`)
     .option('--js-name <jsFile>', `to configure the module's javascript file`)
     .option('--ss-name <ssFile>', `to configure the module's stylesheet file`)
-    .option('--dependencies-rm <dependencies>', 'to configure the module dependencies', Common.optionList)
-    .option('--description <description>', `to configure the module's description`)
-    .option('--license <license>', `to configure the module's license`)
-    .option('--keywords <keywords>', `to configure the module's keywords`, Common.optionList)
     .option('--classes <classes>', `to configure the module's classes`, Common.optionList)
+    .option('--readme <readmeFile>', `to configure the module's README.md file`)
+    .option('--repository <repository>', `to configure the module's repository`)
+    .option('--license <license>', `to configure the module's license`)
     .option('--debug', 'to display debug logs')
     .action(options => {
-      let edit = {
-        options,
-        initialPath: Common.getCurrentPath(),
-        successes: [],
-        warnings: []
-      }
-      testProjectScopePromise(edit)
-      .then(getModuleJsonPromise)
-      .then(modifyVariableJsonPromise)
-      .then(res => {
-        Common.writeFilePromise(`${edit.path}/${CONST.MODULE_JSON_NAME}`, JSON.stringify(res.json, null, '  '), {}, true)
-        .then(() => {
-          Common.displayMessagesPromise(edit)
-          .then(resolve)
+      if (options.name && typeof options.name !== 'function' && (!/^.{2,}$/.test(options.name) || options.name === 'spm_modules')) {
+        Program.on('--help', () => { console.log(Chalk.hex(CONST.WARNING_COLOR)('name should be longer than 2 characters (value spm_modules forbidden)')) })
+        Program.help()
+        return reject(new Error('name should be longer than 2 characters'))
+      } else if (options.version && typeof options.version !== 'function' && !/^[0-9]+[.][0-9]+[.][0-9]+$/.test(options.version)) {
+        Program.on('--help', () => { console.log(Chalk.hex(CONST.WARNING_COLOR)('please enter a valid version number (x.x.x)')) })
+        Program.help()
+      } else if (options.responsive && !Common.checkCorrectResponsiveness(options.responsive)) {
+        Program.on('--help', () => { console.log(Chalk.hex(CONST.WARNING_COLOR)('authorized responsive values: watch, mobile, phablet, tablet, laptop, screenXl')) })
+        Program.help()
+      } else {
+        let edit = {
+          options,
+          initialPath: Common.getCurrentPath(),
+          successes: [],
+          warnings: []
+        }
+        testProjectScopePromise(edit)
+        .then(getModuleJsonPromise)
+        .then(modifyVariableJsonPromise)
+        .then(res => {
+          Common.writeFilePromise(`${edit.path}/${CONST.MODULE_JSON_NAME}`, JSON.stringify(res.json, null, '  '), {}, true)
+          .then(() => {
+            Common.displayMessagesPromise(edit)
+            .then(resolve)
+            .catch(reject)
+          })
           .catch(reject)
         })
         .catch(reject)
-      })
-      .catch(reject)
+      }
     })
   })
 }

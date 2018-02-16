@@ -55,6 +55,27 @@ let createModulePromise = (create) => {
         name: 'description',
         message: 'description'
       },
+      category: {
+        name: 'category',
+        message: 'category'
+      },
+      responsive: {
+        name: 'responsive',
+        type: 'checkbox',
+        message: 'responsiveness',
+        choices: ['watch', 'mobile', 'phablet', 'tablet', 'laptop', 'screenXl'],
+        default: ['mobile', 'phablet', 'tablet', 'laptop', 'screenXl'],
+        /* must be compatible with at least 1 device */
+        validate: value => {
+          return value.length || Chalk.hex(CONST.WARNING_COLOR)('module must be compatible with at least 1 device')
+        }
+      },
+      keywords: {
+        name: 'keywords',
+        message: 'keywords',
+        default: create.keywords.join(', '),
+        filter: Common.optionList
+      },
       htmlName: {
         name: 'htmlName',
         default: create.htmlName,
@@ -73,22 +94,24 @@ let createModulePromise = (create) => {
         default: create.jsName,
         message: `module's main script`
       },
-      license: {
-        name: 'license',
-        message: 'license',
-        default: create.license
-      },
-      keywords: {
-        name: 'keywords',
-        message: 'keywords',
-        default: create.keywords.join(', '),
-        filter: Common.optionList
-      },
       classes: {
         name: 'classes',
         message: 'classes',
         default: create.classes.join(', '),
         filter: Common.optionList
+      },
+      readme: {
+        name: 'readme',
+        message: 'readme'
+      },
+      repository: {
+        name: 'repository',
+        message: 'repository'
+      },
+      license: {
+        name: 'license',
+        message: 'license',
+        default: create.license
       }
     }
     let questions = []
@@ -215,8 +238,12 @@ module.exports = (Program) => {
     .option('--style <style>', `to configure the module's style`)
     .option('--main-class <mainClass>', `to configure the module's main class`)
     .option('--description <description>', `to configure the module's description`)
-    .option('--license <license>', `to configure the module's license`)
+    .option('--category <category>', `to configure the module's category`)
+    .option('--responsive <devices>', `to configure the module's responsiveness`, Common.optionList, [])
     .option('--keywords <keywords>', `to configure the module's keywords`, Common.optionList, [])
+    .option('--readme <readmeFile>', `to configure the module's README.md file`)
+    .option('--repository <repository>', `to configure the module's repository`)
+    .option('--license <license>', `to configure the module's license`)
     .option('--classes <classes>', `to configure the module's classes`, Common.optionList, []) // détection automatique ?
     .option('--html-name <htmlName>', `to configure the html file's name`)
     .option('--ss-name <ssName>', `to configure the stylesheet's name`)
@@ -236,6 +263,9 @@ module.exports = (Program) => {
         return reject(new Error('name should be longer than 2 characters'))
       } else if (options.version && typeof options.version !== 'function' && !/^[0-9]+[.][0-9]+[.][0-9]+$/.test(options.version)) {
         Program.on('--help', () => { console.log(Chalk.hex(CONST.WARNING_COLOR)('please enter a valid version number (x.x.x)')) })
+        Program.help()
+      } else if (options.responsive && !Common.checkCorrectResponsiveness(options.responsive)) {
+        Program.on('--help', () => { console.log(Chalk.hex(CONST.WARNING_COLOR)('authorized responsive values: watch, mobile, phablet, tablet, laptop, screenXl')) })
         Program.help()
       } else {
         let create = new Models.Create(name, options)

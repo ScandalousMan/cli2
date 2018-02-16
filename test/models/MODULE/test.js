@@ -24,7 +24,7 @@ module.exports = (dir) => {
         for (let file of expectedFiles) { expect(files).to.include(file) }
         Common.getJsonFilePromise('testModule/module-spm.json')
         .then(json => {
-          expect(json).to.have.all.keys('name', 'version', 'style', 'type', 'author', 'files', 'mainClass', 'description', 'dependencies', 'license', 'keywords', 'contributors', 'classes')
+          expect(json).to.have.all.keys('name', 'version', 'style', 'type', 'author', 'files', 'mainClass', 'category', 'description', 'repository', 'readme', 'responsive', 'dependencies', 'license', 'keywords', 'contributors', 'classes')
           expect(json.name).to.equal('testModule')
           done()
         })
@@ -55,7 +55,7 @@ module.exports = (dir) => {
     .then(() => {
       let args = console.log.args[console.log.args.length - 1][console.log.args[console.log.args.length - 1].length - 1]
       console.log.restore()
-      expect(args).to.equal('{\n  "name": "testModule",\n  "version": "1.0.0",\n  "style": "css",\n  "type": "native",\n  "author": "testTravis",\n  "mainClass": "moduleTest",\n  "files": {\n    "index": "testModule.html",\n    "script": "testModule.js",\n    "style": "testModule.css"\n  },\n  "classes": [],\n  "description": "",\n  "license": "MIT",\n  "keywords": [],\n  "contributors": [],\n  "dependencies": {}\n}')
+      expect(args).to.equal('{\n  "name": "testModule",\n  "version": "1.0.0",\n  "author": "testTravis",\n  "style": "css",\n  "type": "native",\n  "mainClass": "moduleTest",\n  "description": "",\n  "category": "",\n  "responsive": [],\n  "keywords": [],\n  "dependencies": {},\n  "files": {\n    "index": "testModule.html",\n    "script": "testModule.js",\n    "style": "testModule.css"\n  },\n  "classes": [],\n  "readme": "",\n  "repository": "",\n  "license": "MIT",\n  "contributors": []\n}')
       done()
     })
     .catch(console.log)

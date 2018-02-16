@@ -28,6 +28,7 @@
     "clear": "0.0.1",
     "commander": "^2.14.1",
     "figlet": "^1.2.0",
+    "html-validator": "^2.2.3",
     "inquirer": "^5.1.0",
     "node-sass": "git+https://git@github.com/ScandalousMan/node-sass.git",
     "ora": "^1.4.0",
