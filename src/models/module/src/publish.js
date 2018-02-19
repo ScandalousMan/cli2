@@ -1,18 +1,18 @@
 let Fs = require('fs')
-// let Path = require('path')
-// let Prompt = require('inquirer').prompt
+let Path = require('path')
 let Chalk = require('chalk')
-// let Request = require('request')
+let Request = require('request')
 // let Sass = require('node-sass')
 // let Js = require('../lib/js')
-// let Css = require('../lib/css')
+let Css = require('../lib/css')
 let Html = require('../lib/html')
 let Models = require('../lib/models')
 let CONST = require('../../../lib/const')
 let Debug = require('../../../lib/debug')
 let Common = require('../../../lib/common')
-// let Authentify = require('./authentify')
-// let Spinner = require('./spinner')
+let Authentify = require('../../../models/user/lib/authentify')
+let Spinner = require('../../../models/user/lib/spinner')
+let Tar = require('tar')
 
 /* Detect if in the scope of a project */
 let testProjectScopePromise = (publish) => {
@@ -54,6 +54,7 @@ let downRecursiveModuleNameSearchPromise = (publish, currentDirectory) => {
             })
           } else {
             publish.json = json
+            publish.
             publish.path = currentDirectory
             return resolve(publish)
           }
@@ -80,7 +81,6 @@ let upRecursiveModuleNameSearchPromise = (publish, currentDirectory) => {
           .then(resolve)
           .catch(reject)
         } else {
-          publish.json = json
           publish.path = currentDirectory
           return resolve(publish)
         }
@@ -124,7 +124,7 @@ let checkModuleJsonPromise = (publish) => {
         message: `name should be longer than 2 characters (value spm_modules forbidden) - use 'spm2 module edit --name <name>'`
       },
       version: {
-        regex: /^[0-9]+[.][0-9]+[.][0-9]+$/,
+        regex: publish.version ? false : /^[0-9]+[.][0-9]+[.][0-9]+$/,
         message: `Incorrect version in package-spm.json - use 'spm2 module edit --version <version>'`
       },
       style: {
@@ -165,7 +165,112 @@ let checkModuleJsonPromise = (publish) => {
         return reject(new Error(`incorrect ${moduleArray} - use 'spm2 module edit --${moduleArray} <${moduleArray}>'`))
       }
     }
+    publish.name = publish.json.name
+    publish.version = publish.version || publish.json.version
     return resolve(publish)
+  })
+}
+
+/* adds in ignoreList specific files from .spmignore file */
+let parseIgnoreFilePromise = (publish) => {
+  if (publish.debug) { Debug() }
+  return new Promise((resolve, reject) => {
+    Fs.readFile(`${publish.path}/.spmignore`, 'utf8', (err, data) => {
+      if (err && err.code !== 'ENOENT') { return reject(err) } else if (err) { return resolve([]) }
+      let ignores = []
+      for (let ignore of data.split('\n')) { if (ignore.length) { ignores.push(ignore) } }
+      return resolve(ignores)
+    })
+  })
+}
+
+let processIgnoredFilesPromise = (publish) => {
+  return new Promise((resolve, reject) => {
+    parseIgnoreFilePromise(publish)
+    .then(ignoredFiles => {
+      publish.ignores = ['.tmp_spm', '.gitignore', '.npmignore', 'module-spm.json', '${publish.json.name}.html'].concat(ignoredFiles)
+      return resolve(publish)
+    })
+    .catch(reject)
+  })
+}
+
+/* creates a mapping of all classes related to dependencies object in package.json */
+let mapDependenciesClassesPromise = (publish) => {
+  if (publish.debug) { Debug() }
+  return new Promise((resolve, reject) => {
+    publish.dependenciesClassesMapping = {}
+    let promises = []
+    let promiseList = []
+    publish.dependencies = publish.json.dependencies || {}
+    for (let dependency in publish.json.dependencies) {
+      promises.push(Common.getJsonFilePromise(`${publish.path}/spm_modules/${dependency}/module-spm.json`))
+      promiseList.push(dependency)
+    }
+    Promise.all(promises)
+    .then(results => {
+      for (let i = 0; i < results.length; i++) {
+        if (results[i] === null) {
+          delete publish.dependencies[promiseList[i]]
+          publish.warnings.push(`dependency ${promiseList[i]} has no module-spm.json - reinstall using --force`)
+        } else {
+          if (!results[i].classes) { return reject(new Error(`dependency ${promiseList[i]} has no class defined - reinstall using --force`)) }
+          for (let item of results[i].classes) {
+            publish.dependenciesClassesMapping[item.name] = { module: promiseList[i], instance: promiseList[i] }
+          }
+          for (let instance in publish.dependencies[promiseList[i]].instances) {
+            for (let instanceClass in publish.dependencies[promiseList[i]].instances[instance].classes) {
+              publish.dependenciesClassesMapping[publish.dependencies[promiseList[i]].instances[instance].classes[instanceClass]] = { module: promiseList[i], instance: instance }
+            }
+          }
+        }
+      }
+      return resolve(publish)
+    })
+    .catch(reject)
+  })
+}
+
+/* initiates the copy folder and the copy functions */
+let publicationCopyPromise = (publish) => {
+  if (publish.debug) { Debug() }
+  return new Promise((resolve, reject) => {
+    Common.FolderCopyPromise(publish.path, `${publish.path}/.tmp_spm`, file => {
+      for (let ignoredFile of publish.ignores) { if (Path.relative(file, `${publish.path}/${ignoredFile}`) === '') { return false } }
+      let relativePath = Path.relative(`${publish.path}/spm_modules`, file)
+      if (!relativePath.startsWith('..') && relativePath !== '') {
+        for (let dependency in publish.dependencies) {
+          if (Path.relative(`${publish.path}/spm_modules/${dependency}`, file).startsWith('..')) {
+            return true
+          }
+        }
+        return false
+      }
+      return true
+    })
+    .then(() => {
+      return resolve(publish)
+    })
+    .catch(reject)
+  })
+}
+
+/* prepares publish workspace */
+let prepareWorkspacePromise = (publish) => {
+  return new Promise((resolve, reject) => {
+    Fs.mkdir(`${publish.path}/.tmp_spm`, err => {
+      if (err && err.code !== 'EEXIST') { return reject(err) }
+      else if (err) { return reject(new Error(`${publish.path}/.tmp_spm forbidden name in publication - please delete before publication`)) }
+      Fs.mkdir(`${publish.path}/.tmp_spm/.sass_spm`, err => {
+        if (err && err.code !== 'EEXIST') { return reject(err) }
+        else if (err) { return reject(new Error(`${publish.path}/.tmp_spm forbidden name in publication - please delete before publication`)) }
+        processIgnoredFilesPromise(publish)
+        .then(mapDependenciesClassesPromise)
+        .then(publicationCopyPromise)
+        .then(resolve)
+        .catch(reject)
+      })
+    })
   })
 }
 
@@ -212,30 +317,108 @@ let checkModuleFilesPromise = (publish) => {
   return new Promise((resolve, reject) => {
     let promises = []
     promises.push(htmlFileCheckerPromise(publish))
+    promises.push(Css.cssFileCheckerPromise(publish))
     Promise.all(promises)
     .then(() => {
       return resolve(publish)
     })
     .catch(reject)
-    /* what with the html merge conflict ? => name differs if within a project or not ? */
-    // 1 check if they are present | html depends on project existence or not => update of create && edit
-    // 2 tricky logic for html if absent
-    // 3 launch 3 process for html domParser | javascript parser | (s)css parser
-    // 4 resolve()
   })
 }
 
-// /* prepares publish workspace */
-// let prepareWorkspacePromise = (publish) => {
-//   return new Promise((resolve, reject) => {
-//   })
-// }
+/* Displays the publication and asks the publisher for final confirmation */
+let confirmationPublishPromise = (publish) => {
+  if (publish.debug) { Debug() }
+  return new Promise((resolve, reject) => {
+    console.log(`You are about to publish the module ${publish.name}@${publish.version}\nif you have the rights to publish, your contribution will be added in spm registry`)
+    Common.promptConfirmation(publish, true, 'Do you confirm this ')
+    .then(resolve)
+    .catch(reject)
+  })
+}
 
-// /* cleans publish workspace */
-// let cleanWorkspacePromise = (publish) => {
-//   return new Promise((resolve, reject) => {
-//   })
-// }
+/* Auth module - publication requires a spm account and authorization on existing package */
+let promptUserPromise = (publish) => {
+  if (publish.debug) { Debug() }
+  return new Promise((resolve, reject) => {
+    Authentify.getSpmAPIToken('login')
+    .then(token => {
+      publish.token = token
+      return resolve(publish)
+    })
+    .catch(reject)
+  })
+}
+
+/* Prepares payload and sends content to spm registry - handles api replies */
+let sendPublicationToRegistryPromise = (publish) => {
+  if (publish.debug) { Debug() }
+  return new Promise((resolve, reject) => {
+    let formData = {
+      package: JSON.stringify({
+        name: publish.name,
+        version: publish.version,
+        type: publish.json.type,
+        style: publish.json.style,
+        main: publish.json.mainClass,
+        classes: publish.json.classes,
+        description: publish.json.description,
+        entry: publish.json.files.style,
+        dependencies: publish.json.dependencies,
+        scripts: publish.json.scripts,
+        repository: publish.json.repository,
+        readme: publish.json.readme,
+        keywords: publish.json.keywords,
+        license: publish.json.license,
+        dom: {type: 'custom', value: publish.dom},
+        responsiveness: publish.json.responsive,
+        category: publish.json.category
+      })
+    }
+    if (publish.debug) console.log('package', formData.package)
+    formData.module = Fs.createReadStream(`${publish.path}/.tmp_spm_publish/${publish.name}.tgz`)
+
+    let spinner = new Spinner('sending to registry...', 'monkey')
+    spinner.start()
+    Request.put({
+      url: CONST.PUBLISH_URL,
+      headers: {
+        'Authorization': `bearer ${publish.token}`
+      },
+      formData: formData
+    }, function (error, response, body) {
+      if (error) { return reject(spinner.errorStop(`there was an error sending data to spm registry - please try again later or contact our support\n${error}`)) }
+      let res = JSON.parse(body)
+      if (Math.floor(res.statusCode / 100) >= 4) {
+        return reject(spinner.errorStop(res.message))
+      } else {
+        spinner.successStop(`module publication correctly processed by spm registry`)
+        if (res.name !== publish.name) {
+          publish.warnings.push(`your package ${publish.name} has been renamed to ${res.name} by spm registry`)
+        }
+        publish.successes.push(`${res.name}@${res.version} has been successfully created`)
+        return resolve(publish)
+      }
+    })
+    .on('error', err => {
+      return reject(spinner.errorStop(`there was an error sending data to spm registry - please try again later or contact our support\n${err}`))
+    })
+  })
+}
+
+/* cleans publish workspace */
+let cleanWorkspacePromise = (publish) => {
+  return new Promise((resolve, reject) => {
+    Common.deleteFolderRecursivePromise(`${publish.path}/.tmp_spm`)
+    .then(() => {
+      Common.deleteFolderRecursivePromise(`${publish.path}/.tmp_spm_publish`)
+      .then(() => {
+        return resolve(publish)
+      })
+    })
+    .catch(reject)
+  })
+}
 
 /* PROJECT PUBLISH : to send your module to spm registry and factory */
 module.exports = (Program) => {
@@ -258,9 +441,20 @@ module.exports = (Program) => {
         testProjectScopePromise(publish)
         .then(getModuleJsonPromise)
         .then(checkModuleJsonPromise)
+        .then(prepareWorkspacePromise)
         .then(checkModuleFilesPromise)
-        .then(res => { console.log(res); return resolve(res) })
-        .catch(reject)
+        .then(confirmationPublishPromise)
+        .then(promptUserPromise)
+        .then(createTgzPromise)
+        .then(sendPublicationToRegistryPromise)
+        .then(cleanWorkspacePromise)
+        .then(Common.displayMessagesPromise)
+        .then(resolve)
+        .catch(err => {
+          cleanWorkspacePromise(publish, true)
+          .then(() => { return reject(err) })
+          .catch(reject)
+        })
       }
     })
   })
@@ -268,445 +462,28 @@ module.exports = (Program) => {
 
 /* -------------------------- */
 
-// /* Checks custom dom file and attaches it to the publication */
-// let verifyRefDomPromise = (publication) => {
-//   if (publication.debug) { Debug() }
-//   return new Promise((resolve, reject) => {
-//     Fs.readFile(`${publication.path}/ref-dom.html`, 'utf8', (err, data) => {
-//       if (err && err.code !== 'ENOENT') {
-//         return reject(err)
-//       } else if (err) {
-//         return reject(new Error('error - reference DOM missing'))
-//       }
-//       publication.dom = {type: 'custom', value: data}
-//       return resolve(publication)
-//     })
-//   })
-// }
 
-// /* Displays the publication and asks the publisher for final confirmation */
-// let confirmationPublishPromise = (publication) => {
-//   if (publication.debug) { Debug() }
-//   return new Promise((resolve, reject) => {
-//     console.log(`You are about to publish the module ${publication.name}@${publication.version}\nif you have the rights to publish, your contribution will be added in spm registry`)
-//     Common.promptConfirmation(publication, true, 'Do you confirm this ')
-//     .then(resolve)
-//     .catch(reject)
-//   })
-// }
+/* tgz creation */
+let createTgzPromise = (publish) => {
+  if (publish.debug) { Debug() }
+  return new Promise((resolve, reject) => {
+    Fs.mkdir(`${publish.path}/.tmp_spm_publish`, err => {
+      if (err && err.code !== 'EEXIST') { return reject(err) }
+      Common.tgzFilePromise(`${publish.path}/.tmp_spm`, `${publish.path}/.tmp_spm_publish/${publish.name}.tgz`
+    // , (path, stat) => {
+    //     console.log('PATH', path, Path.relative('.tmp_spm/spm_modules', path))
+    //     return Path.relative(path, '.tmp_spm/spm_modules').startsWith('..')
+    //   }
+      )
+      .then(() => {
+        return resolve(publish)
+      })
+      .catch(reject)
+    })
+  })
+}
 
-// /* Auth module - publication requires a spm account and authorization on existing package */
-// let promptUserPromise = (publication) => {
-//   if (publication.debug) { Debug() }
-//   return new Promise((resolve, reject) => {
-//     Authentify.login()
-//     .then(token => {
-//       publication.token = token
-//       return resolve(publication)
-//     })
-//     .catch(reject)
-//   })
-// }
-
-// /* adds in ignoreList specific files from .spmignore list */
-// let parseIgnoreFiles = (ignoreFiles, publication) => {
-//   if (publication.debug) { Debug() }
-//   let ignores = []
-//   for (let ignoreFile of ignoreFiles) {
-//     if (Fs.existsSync(ignoreFile)) {
-//       for (let file of Fs.readFileSync(ignoreFile).toString().split('\n')) {
-//         if (file !== '') {
-//           ignores.push(file)
-//         }
-//       }
-//     }
-//   }
-//   return ignores
-// }
-
-// /* basic files always ignored */
-// let updateDefaultIgnoreFiles = (ignores, publication) => {
-//   if (publication.debug) { Debug() }
-//   let defaultIgnoreFiles = ['.tmp_sass', 'tmp/', '.gitignore', '.spmignore', 'package-spm.json', 'ref-dom.html']
-//   for (let ignoreFile of defaultIgnoreFiles) {
-//     if (!ignores.includes(ignoreFile)) {
-//       ignores.push(ignoreFile)
-//     }
-//   }
-//   return ignores
-// }
-
-// /* spm embeds a .spmignore file listing files to ignore */
-// let verifyIgnoredFilesPromise = (publication) => {
-//   if (publication.debug) { Debug() }
-//   return new Promise((resolve, reject) => {
-//     let ignores = parseIgnoreFiles([
-//       publication.path + '/.gitignore',
-//       publication.path + '/.spmignore'
-//     ], publication)
-//     publication.ignore = updateDefaultIgnoreFiles(ignores, publication)
-//     return resolve(publication)
-//   })
-// }
-
-// /* checks if a given selector has a valid scope included inside one of the publication's classes */
-// let parseSelector = (selector, classes, dependenciesMap) => {
-//   let item
-//   if (selector.indexOf(' ') >= 0) {
-//     let table = selector.split(' ')
-//     let i = 0
-//     if (i >= table.length) { return null } else { item = table[i] }
-//   } else { item = selector }
-//   let allClasses = classes.concat(Object.keys(dependenciesMap))
-//   for (let moduleClass of allClasses) {
-//     let i = item.indexOf('.' + moduleClass)
-//     if (i >= 0 &&
-//       ((i + moduleClass.length + 1 === item.length) || [' ', '\n', '\t', '.', '[', '{', '&', ':', ',', ';'].includes(item[i + moduleClass.length + 1]))) {
-//       return item
-//     }
-//   }
-//   return null
-// }
-
-// /* checks publication can't impact external elements with a larger-scoped selector */
-// let parseSelectors = (data, classes, dependenciesMap) => {
-//   let parsed = data.split(',')
-//   for (let selector of parsed) {
-//     selector = Common.removeWhitespaces(selector)
-//     if (!selector.startsWith('@') && !parseSelector(selector, classes, dependenciesMap)) {
-//       return false
-//     }
-//   }
-//   return true
-// }
-
-// /* high level scope checker for css file */
-// let checkClass = (file, publication, style = publication.style) => {
-//   if (publication.debug) { Debug() }
-//   return new Promise((resolve, reject) => {
-//     Fs.readFile(file, 'utf8', function (err, data) {
-//       if (err) { return reject(err) }
-//       data = Common.cssCleaner(data)
-//       let startIndex = 0
-//       let i, j
-//       let tmpClasses = publication.classes.concat([publication.main]) // .concat(Object.keys(publication.dependenciesClassesMapping))
-//       while ((i = data.indexOf('@import', startIndex)) >= 0) { startIndex = data.indexOf(';', i) + 1 }
-//       while (startIndex >= 0 && (i = data.indexOf('@mixin', startIndex)) >= 0) {
-//         startIndex = data.indexOf('{', i) + 1
-//         let count = 0
-//         while (startIndex < data.length &&
-//           (data[startIndex] !== '}' || count > 0)) {
-//           if (data[startIndex] === '{') { count++ }
-//           if (data[startIndex] === '}') { count-- }
-//           startIndex++
-//         }
-//         startIndex++
-//       }
-//       while ((i = data.indexOf('{', startIndex)) >= 0) {
-//         j = data.indexOf('@media', startIndex)
-//         if (j < 0 || i < j) {
-//           if (!parseSelectors(data.substring(startIndex, i), tmpClasses, publication.dependenciesClassesMapping) && Common.cleanValue(data.substring(startIndex, i)) !== ':root') {
-//             return reject(new Error(`incorrect selector found : ${data.substring(startIndex, i)} in ${file}`))
-//           }
-//           i = data.indexOf('}', i)
-//         }
-//         startIndex = i + 1
-//       }
-//       return resolve(publication)
-//     })
-//   })
-// }
-
-// /* Information parser from @import tags */
-// let importToFile = (data) => {
-//   if (data.length > 2) {
-//     if (data.startsWith("'") &&
-//       data.split("'").length === 3 &&
-//       data.split("'")[0] === '') {
-//       return data.split("'")[1]
-//     }
-//     if (data.startsWith('"') &&
-//       data.split('"').length === 3 &&
-//       data.split('"')[0] === '') {
-//       return data.split('"')[1]
-//     }
-//     if (data.startsWith('url(') && data.indexOf(')') > 5) {
-//       return importToFile(data.substring(4, data.indexOf(')')))
-//     }
-//   }
-//   return null
-// }
-
-// /* Checks all import found from the entry file are included in the project */
-// let recursiveCheckModule = (path, file, publication) => {
-//   if (publication.debug) { Debug() }
-//   if (!path.endsWith('/')) { path += '/' }
-//   publication.ressources.push(path + file)
-//   return new Promise((resolve, reject) => {
-//     if (!Fs.existsSync(path + file)) {
-//       return reject(new Error(`imported file ${path}${file} doesn't exist`))
-//     } else if (Path.relative(publication.path, path + file).startsWith('..')) {
-//       // no link should be found to registry since it should link to a symlink in spm_modules/
-//       return reject(new Error(`imported file ${path}${file} out of project's scope`))
-//     } else {
-//       Fs.readFile(path + file, 'utf8', (err, data) => {
-//         if (err) {
-//           return reject(err)
-//         } else {
-//           checkClass(path + file, publication)
-//           .then(res => {
-//             return new Promise((resolve, reject) => {
-//               let dataAt = data.split('@import ')
-//               let dataAtClose = []
-//               for (let elem of dataAt) {
-//                 if (elem.indexOf(';') >= 0) {
-//                   let resultFile = importToFile(elem.split(';')[0])
-//                   if (resultFile && !resultFile.startsWith('http')) {
-//                     dataAtClose.push(resultFile)
-//                   }
-//                 }
-//               }
-//               let promises = []
-//               for (let module of dataAtClose) {
-//                 promises.push(recursiveCheckModule(path + module.substring(0, module.lastIndexOf('/')), module.split('/')[module.split('/').length - 1], publication))
-//               }
-//               Promise.all(promises)
-//                 .then(() => { return resolve(publication) })
-//                 .catch(reject)
-//             })
-//           })
-//           .then(resolve)
-//           .catch(reject)
-//         }
-//       })
-//     }
-//   })
-// }
-
-// /* Convert the project to css if needed in order to check selectors' scope */
-// let scssToCssForCheck = (publication) => {
-//   if (publication.debug) { Debug() }
-//   return new Promise((resolve, reject) => {
-//     if (publication.style === 'scss') {
-//       Fs.mkdir(`${publication.path}/.tmp_sass`, err => {
-//         if (err && err.code !== 'EEXIST') { return reject(err) }
-//         Fs.writeFile(`${publication.path}/.tmp_sass/entry.scss`, `@import '../tmp/${publication.entry}';`, err => {
-//           if (err) { return reject(err) }
-//           Sass.render({
-//             file: `${publication.path}/.tmp_sass/entry.scss`,
-//             outFile: `${publication.path}/.tmp_sass/full.css`
-//           }, function (error, result) {
-//             if (!error) {
-//               Fs.writeFile(publication.path + '/.tmp_sass/full.css', result.css, function (err) {
-//                 if (!err) {
-//                   checkClass(publication.path + '/.tmp_sass/full.css', publication, 'css')
-//                   .then(() => {
-//                     Common.deleteFolderRecursive(`${publication.path}/.tmp_sass`, () => {
-//                       return resolve(publication)
-//                     })
-//                   })
-//                   .catch(reject)
-//                 } else { return reject(new Error('error while converting scss file to css')) }
-//               })
-//             } else { return reject(error.message) } // node-sass error message
-//           })
-//         })
-//       })
-//     } else {
-//       return resolve(publication)
-//     }
-//   })
-// }
-
-// /* To confirm the deletion of declared and unused dependencies */
-// let confirmDependancyRemoval = (publication) => {
-//   if (publication.debug) { Debug() }
-//   return new Promise((resolve, reject) => {
-//     if (Object.keys(publication.removed).length) {
-//       let questions = [
-//         {
-//           type: 'checkbox',
-//           name: 'keeping',
-//           message: 'spm has detected the following unused dependancies - which one do you want to keep ?\n',
-//           choices: Object.keys(publication.removed)
-//         }
-//       ]
-//       Prompt(questions)
-//       .then(answer => {
-//         let removed = {}
-//         console.log('pubRemoved', publication.removed)
-//         console.log('keeping', answer.keeping)
-//         for (let item in publication.removed) {
-//           if (!(answer.keeping).includes(item)) {
-//             removed[item] = publication.dependencies[item]
-//             delete publication.dependencies[item]
-//           }
-//         }
-//         publication.removed = removed
-//         return resolve(publication)
-//       })
-//       .catch(reject)
-//     } else {
-//       return resolve(publication)
-//     }
-//   })
-// }
-
-// /* Some dependency can be declared and not used */
-// let unusedDependancies = (publication) => {
-//   if (publication.debug) { Debug() }
-//   return new Promise((resolve, reject) => {
-//     let dependencies = Object.assign({}, publication.dependencies)
-//     let removed = {}
-//     for (let dependency in dependencies) {
-//       let flag = false
-//       for (let ressource of publication.ressources) {
-//         if (Path.relative(`${publication.path}/spm_modules/${dependency}`, ressource.substring(0, ressource.lastIndexOf('/'))) === '') {
-//           flag = true
-//           break
-//         }
-//       }
-//       if (!flag) {
-//         publication.warnings.push(`dependency ${dependency} is not used`)
-//         removed[dependency] = dependencies[dependency]
-//       }
-//     }
-//     publication.removed = removed
-//     confirmDependancyRemoval(publication)
-//     .then(resolve)
-//     .catch(reject)
-//   })
-// }
-
-// /* creates a mapping of all classes related to dependencies object in package.json */
-// let mapDependenciesClassesPromise = (publication) => {
-//   if (publication.debug) { Debug() }
-//   return new Promise((resolve, reject) => {
-//     publication.dependenciesClassesMapping = {}
-//     let promises = []
-//     let promiseList = []
-//     for (let dependency in publication.dependencies) {
-//       promises.push(Common.getPackageSpmFilePromise(`${publication.path}/spm_modules/${dependency}/package-spm.json`))
-//       promiseList.push(dependency)
-//     }
-//     Promise.all(promises)
-//     .then(results => {
-//       for (let i = 0; i < results.length; i++) {
-//         if (results[i] === null) {
-//           delete publication.dependencies[promiseList[i]]
-//           publication.warnings.push(`dependency ${promiseList[i]} has no package-spm.json - reinstall using --force`)
-//         } else {
-//           for (let item of results[i].classes) {
-//             publication.dependenciesClassesMapping[item.name] = { module: promiseList[i], instance: promiseList[i] }
-//           }
-//           for (let instance in publication.dependencies[promiseList[i]].instances) {
-//             for (let instanceClass in publication.dependencies[promiseList[i]].instances[instance].classes) {
-//               publication.dependenciesClassesMapping[publication.dependencies[promiseList[i]].instances[instance].classes[instanceClass]] = { module: promiseList[i], instance: instance }
-//             }
-//           }
-//         }
-//       }
-//       return resolve(publication)
-//     })
-//     .catch(reject)
-//   })
-// }
-
-// /* deleting the spm_modules from the tmp folder */
-// let clearspmModulesTmpPromise = (publication) => {
-//   if (publication.debug) { Debug() }
-//   return new Promise((resolve, reject) => {
-//     Common.deleteFolderRecursivePromise(`${publication.path}/tmp/spm_modules`)
-//     .then(() => { return resolve(publication) })
-//     .catch(reject)
-//   })
-// }
-
-// /* Driving the checks -> correct imports & correct dependencies */
-// let checkModule = (publication) => {
-//   if (publication.debug) { Debug() }
-//   return new Promise((resolve, reject) => {
-//     recursiveCheckModule(publication.path, publication.entry, publication)
-//     .then(scssToCssForCheck)
-//     .then(unusedDependancies)
-//     .then(clearspmModulesTmpPromise)
-//     .then(resolve)
-//     .catch(reject)
-//   })
-// }
-
-// /* recursive directory copier with tmp files logic */
-// let recursiveDirectoryCopy = (path, directory, ignores, publication) => {
-//   if (publication.debug) { Debug() }
-//   return new Promise((resolve, reject) => {
-//     Fs.mkdir(`${path}/tmp${directory.substring(path.length)}`, err => {
-//       if (err && err.code !== 'EEXIST') { return reject(err) }
-//       Fs.readdir(directory, (err, files) => {
-//         if (err) { return reject(err) }
-//         if (files.length > 0) {
-//           let promises = []
-//           for (let file of files) {
-//             if (!ignores.includes(file) && !ignores.includes(file + '/')) {
-//               if (Fs.lstatSync(directory + file).isDirectory()) {
-//                 if (!file.endsWith('/')) { file += '/' }
-//                 let subIgnores = []
-//                 for (let ignore of ignores) {
-//                   if (ignore.startsWith(file)) {
-//                     subIgnores.push(ignore.substring(file.length))
-//                   }
-//                 }
-//                 promises.push(recursiveDirectoryCopy(path, directory + file, subIgnores, publication))
-//               } else {
-//                 Fs.readFile(directory + file, 'utf8', (err, data) => {
-//                   if (err) { return reject(err) }
-//                   promises.push(new Promise((resolve, reject) => {
-//                     Fs.writeFile(`${path}/tmp${directory.substring(path.length)}${file}`, data, err => {
-//                       if (err) { return reject(err) }
-//                       return resolve()
-//                     })
-//                   }))
-//                 })
-//               }
-//             }
-//           }
-//           Promise.all(promises)
-//           .then(resolve)
-//           .catch(reject)
-//         } else { return resolve() }
-//       })
-//     })
-//   })
-// }
-
-// /* initiates the copy folder and the copy functions */
-// let publicationCopyPromise = (publication) => {
-//   if (publication.debug) { Debug() }
-//   return new Promise((resolve, reject) => {
-//     Fs.mkdir(`${publication.path}/tmp`, err => {
-//       if (err && err.code !== 'EEXIST') { return reject(err) }
-//       recursiveDirectoryCopy(publication.path, publication.path + '/', publication.ignore, publication)
-//       .then(() => { return resolve(publication) })
-//       .catch(reject)
-//     })
-//   })
-// }
-
-// /* tgz creation */
-// let createTgzPromise = (publication) => {
-//   if (publication.debug) { Debug() }
-//   return new Promise((resolve, reject) => {
-//     Fs.mkdir(`${publication.path}/.tmp`, err => {
-//       if (err && err.code !== 'EEXIST') { return reject(err) }
-//       Common.tgzFilePromise(`${publication.path}/tmp`, `${publication.path}/.tmp/${publication.name}.tgz`)
-//       .then(() => {
-//         return resolve(publication)
-//       })
-//       .catch(reject)
-//     })
-//   })
-// }
-
-// /* many folders created during publication preparation - clean-up function */
+/* many folders created during publication preparation - clean-up function */
 // let cleanUpWorkingDirectory = (publication) => {
 //   if (publication.debug) { Debug() }
 //   return new Promise((resolve, reject) => {
@@ -722,63 +499,6 @@ module.exports = (Program) => {
 //   })
 // }
 
-// /* Prepares payload and sends content to spm registry - handles api replies */
-// let sendPublicationToRegistryPromise = (publication) => {
-//   if (publication.debug) { Debug() }
-//   return new Promise((resolve, reject) => {
-//     let packageSpm = new PublishPackageSpm(
-//       publication.name,
-//       publication.version,
-//       publication.type,
-//       publication.style,
-//       publication.main,
-//       publication.classes,
-//       publication.description,
-//       publication.entry,
-//       publication.dependencies,
-//       publication.scripts,
-//       publication.repository,
-//       publication.readme,
-//       publication.keywords,
-//       publication.engines,
-//       publication.license,
-//       publication.dom,
-//       publication.responsiveness,
-//       publication.category
-//     )
-//     let formData = {}
-//     formData.package = JSON.stringify(packageSpm)
-//     if (publication.debug) console.log('package', formData.package)
-//     formData.module = Fs.createReadStream(`${publication.path}/.tmp/${publication.name}.tgz`)
-//     // formData.token = publication.token
-//     let spinner = new Spinner('sending to registry...', 'monkey')
-//     spinner.start()
-//     Request.put({
-//       url: CONST.PUBLISH_URL,
-//       headers: {
-//         'Authorization': `bearer ${publication.token}`
-//       },
-//       formData: formData
-//     }, function (error, response, body) {
-//       cleanUpWorkingDirectory(publication)
-//       .then(() => {
-//         if (error) { return reject(spinner.errorStop(`there was an error sending data to spm registry - please try again later or contact our support\n${error}`)) }
-//         let res = JSON.parse(body)
-//         if (Math.floor(res.statusCode / 100) >= 4) {
-//           return reject(spinner.errorStop(res.message))
-//         } else {
-//           spinner.successStop(`publication correctly processed by spm registry`)
-//           if (res.name !== publication.initialName || packageSpm.name) {
-//             publication.warnings.push(`your package ${publication.initialName || packageSpm.name} has been renamed to ${res.name} by spm registry`)
-//           }
-//           publication.successes.push(`${res.name}@${res.version} has been successfully created`)
-//           return resolve(publication)
-//         }
-//       })
-//       .catch(reject)
-//     })
-//   })
-// }
 
 // /* High level publication function -> checks, copies, compresses and sends publication to spm registry */
 // let publishModulePromise = (publication) => {

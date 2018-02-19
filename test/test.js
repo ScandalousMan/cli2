@@ -1,6 +1,8 @@
 let Standard = require('standard')
 let expect = require('chai').expect
 const util = require('util')
+let Interceptor = require('./lib/intercept')
+let testInterceptor
 
 let dir = process.cwd()
 
@@ -11,8 +13,8 @@ let importTest = (name, path) => {
 }
 
 /* testing standard.js */
-describe('Standard', () => {
-  it('standard', done => {
+describe('f° Standard', () => {
+  it('src', done => {
     Standard.lintFiles([], { cwd: 'src' }, function (err, results) {
       if (err) { console.log(err) }
       let issues = []
@@ -27,7 +29,20 @@ describe('Standard', () => {
   })
 })
 
+/* starting the interceptor */
+describe('f° Interceptor on', () => {
+  it('done', () => {
+    testInterceptor = Interceptor.startInterceptor()
+    expect(testInterceptor).to.not.equal(null)
+  })
+})
 /* importing all the test categories */
 importTest('model USER', './models/USER/test')
-importTest('model PROJECT', './models/PROJECT/test')
-importTest('model MODULE', './models/MODULE/test')
+// importTest('model PROJECT', './models/PROJECT/test')
+// importTest('model MODULE', './models/MODULE/test')
+/* stoping the interceptor */
+describe('f° Interceptor off', () => {
+  it('done', () => {
+    Interceptor.stopInterceptor(testInterceptor)
+  })
+})

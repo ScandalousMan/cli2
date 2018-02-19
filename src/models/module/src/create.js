@@ -53,7 +53,11 @@ let createModulePromise = (create) => {
       },
       description: {
         name: 'description',
-        message: 'description'
+        message: 'description',
+        /* descriptions should be at least 1 char long */
+        validate: value => {
+          return (value.length > 0) ? true : Chalk.hex(CONST.WARNING_COLOR)('description is required')
+        }
       },
       category: {
         name: 'category',

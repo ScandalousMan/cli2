@@ -15,6 +15,7 @@ module.exports = (Program) => {
         return resolve()
       } else {
         for (let key in prefs) { delete prefs[key] }
+        prefs.save()
         console.log('user disconnected - come again soon 👻')
         return resolve()
       }

@@ -94,7 +94,7 @@ let modifyVariableJsonPromise = (edit) => {
       license: 'license'
     }
     for (let option in optionsMap) {
-      if (edit.options[option] !== undefined && typeof edit.options[option] !== 'function') {
+      if (edit.options[option] && typeof edit.options[option] !== 'function') {
         optionsToChange[option] = edit.options[option]
         edit.successes.push(`module's key ${optionsMap[option]} successfully updated to ${edit.options[option]}`)
       }
@@ -107,9 +107,9 @@ let modifyVariableJsonPromise = (edit) => {
         style: optionsToChange.style || edit.json.style,
         type: 'native',
         mainClass: optionsToChange.mainClass || edit.json.mainClass,
-        description: optionsToChange.description !== undefined ? optionsToChange.description : edit.json.description,
-        category: optionsToChange.category !== undefined ? optionsToChange.category : edit.json.category,
-        responsive: optionsToChange.responsive !== undefined ? optionsToChange.responsive : edit.json.responsive,
+        description: optionsToChange.description ? optionsToChange.description : edit.json.description,
+        category: optionsToChange.category ? optionsToChange.category : edit.json.category,
+        responsive: optionsToChange.responsive ? optionsToChange.responsive : edit.json.responsive,
         keywords: optionsToChange.keywords || edit.json.keywords,
         dependencies: edit.json.dependencies,
         files: {
@@ -118,9 +118,9 @@ let modifyVariableJsonPromise = (edit) => {
           style: optionsToChange.ssName || edit.json.files.style
         },
         classes: optionsToChange.classes || edit.json.classes,
-        readme: optionsToChange.readme !== undefined ? optionsToChange.readme : edit.json.readme,
-        repository: optionsToChange.repository !== undefined ? optionsToChange.repository : edit.json.repository,
-        license: optionsToChange.license !== undefined ? optionsToChange.license : edit.json.license,
+        readme: optionsToChange.readme ? optionsToChange.readme : edit.json.readme,
+        repository: optionsToChange.repository ? optionsToChange.repository : edit.json.repository,
+        license: optionsToChange.license ? optionsToChange.license : edit.json.license,
         contributors: edit.json.contributors
       }
       return resolve(edit)

@@ -7,6 +7,7 @@ let Request = require('request')
 let CONST = require('./const')
 let Sass = require('node-sass')
 const SCSS_IGNORED_CHARS = [' ', '\n', '\t']
+let Ncp = require('ncp')
 
 /* checks if a responsiveness array is correct */
 let checkCorrectResponsiveness = (responsiveness) => {
@@ -247,15 +248,6 @@ let deleteFolderRecursivePromise = (path, ignoreENOENT = false) => {
     })
   })
 }
-
-/* Promise-based folder deleter */
-// let deleteFolderRecursivePromise = (path) => {
-//   return new Promise((resolve, reject) => {
-//     deleteFolderRecursive(path, () => {
-//       return resolve(path)
-//     })
-//   })
-// }
 
 /* Deletes everything in a folder but the folder itself */
 let deleteContentFolderRecursive = (path, callback, firstRecursive = true) => {
@@ -618,7 +610,7 @@ let displayMessagesPromise = (item) => {
 }
 
 /* plug and play wrapper to compress a file in a tgz format */
-let tgzFilePromise = (input, output) => {
+let tgzFilePromise = (input, output, filter = null) => {
   return new Promise((resolve, reject) => {
     let inputFolder, inputFile
     while (input !== '' && input.endsWith('/')) { input = input.slice(0, -1) }
@@ -633,14 +625,28 @@ let tgzFilePromise = (input, output) => {
       inputFolder = input.substring(0, i)
       inputFile = input.substring(i + 1)
     }
-    Tar.c({
+    let options = {
       file: output,
       C: inputFolder,
       gzip: true
-    }, [inputFile]).then(() => {
+    }
+    if (filter) { options.filter = filter }
+    Tar.c(options, [inputFile]).then(() => {
       return resolve(output)
     })
     .catch(reject)
+  })
+}
+
+/* copy using tar over node Fs */
+let FolderCopyPromise = (input, output, filter = null) => {
+  return new Promise((resolve, reject) => {
+    let options = {}
+    if (filter) { options.filter = filter }
+    Ncp(input, output, options, err => {
+      if (err) { return reject(err) }
+      return resolve(output)
+    })
   })
 }
 
@@ -779,5 +785,6 @@ module.exports = {
   findModuleJsonPromise,
   optionList,
   fileExistsPromise,
-  checkCorrectResponsiveness
+  checkCorrectResponsiveness,
+  FolderCopyPromise
 }
