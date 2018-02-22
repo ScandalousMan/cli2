@@ -2,8 +2,7 @@ let Fs = require('fs')
 let Path = require('path')
 let Chalk = require('chalk')
 let Request = require('request')
-// let Sass = require('node-sass')
-// let Js = require('../lib/js')
+let Js = require('../lib/js')
 let Css = require('../lib/css')
 let Html = require('../lib/html')
 let Models = require('../lib/models')
@@ -12,7 +11,6 @@ let Debug = require('../../../lib/debug')
 let Common = require('../../../lib/common')
 let Authentify = require('../../../models/user/lib/authentify')
 let Spinner = require('../../../models/user/lib/spinner')
-let Tar = require('tar')
 
 /* Detect if in the scope of a project */
 let testProjectScopePromise = (publish) => {
@@ -54,7 +52,6 @@ let downRecursiveModuleNameSearchPromise = (publish, currentDirectory) => {
             })
           } else {
             publish.json = json
-            publish.
             publish.path = currentDirectory
             return resolve(publish)
           }
@@ -82,6 +79,7 @@ let upRecursiveModuleNameSearchPromise = (publish, currentDirectory) => {
           .catch(reject)
         } else {
           publish.path = currentDirectory
+          publish.json = json
           return resolve(publish)
         }
       })
@@ -106,6 +104,7 @@ let getModuleJsonPromise = (publish) => {
         })
         .catch(reject)
       })
+      .catch(reject)
     } else {
       upRecursiveModuleNameSearchPromise(publish, publish.initialPath)
       .then(resolve)
@@ -188,7 +187,7 @@ let processIgnoredFilesPromise = (publish) => {
   return new Promise((resolve, reject) => {
     parseIgnoreFilePromise(publish)
     .then(ignoredFiles => {
-      publish.ignores = ['.tmp_spm', '.gitignore', '.npmignore', 'module-spm.json', '${publish.json.name}.html'].concat(ignoredFiles)
+      publish.ignores = ['.tmp_spm', '.gitignore', '.npmignore', 'module-spm.json', `${publish.json.files.index}`].concat(ignoredFiles)
       return resolve(publish)
     })
     .catch(reject)
@@ -258,56 +257,25 @@ let publicationCopyPromise = (publish) => {
 /* prepares publish workspace */
 let prepareWorkspacePromise = (publish) => {
   return new Promise((resolve, reject) => {
-    Fs.mkdir(`${publish.path}/.tmp_spm`, err => {
-      if (err && err.code !== 'EEXIST') { return reject(err) }
-      else if (err) { return reject(new Error(`${publish.path}/.tmp_spm forbidden name in publication - please delete before publication`)) }
-      Fs.mkdir(`${publish.path}/.tmp_spm/.sass_spm`, err => {
-        if (err && err.code !== 'EEXIST') { return reject(err) }
-        else if (err) { return reject(new Error(`${publish.path}/.tmp_spm forbidden name in publication - please delete before publication`)) }
-        processIgnoredFilesPromise(publish)
-        .then(mapDependenciesClassesPromise)
-        .then(publicationCopyPromise)
-        .then(resolve)
-        .catch(reject)
+    cleanWorkspacePromise(publish)
+    .then(() => {
+      Fs.mkdir(`${publish.path}/.tmp_spm`, err => {
+        if (err && err.code !== 'EEXIST') {
+          return reject(err)
+        } else if (err) { return reject(new Error(`${publish.path}/.tmp_spm forbidden name in publication - please delete before publication`)) }
+        Fs.mkdir(`${publish.path}/.tmp_spm/.sass_spm`, err => {
+          if (err && err.code !== 'EEXIST') {
+            return reject(err)
+          } else if (err) { return reject(new Error(`${publish.path}/.tmp_spm forbidden name in publication - please delete before publication`)) }
+          processIgnoredFilesPromise(publish)
+          .then(mapDependenciesClassesPromise)
+          .then(publicationCopyPromise)
+          .then(resolve)
+          .catch(reject)
+        })
       })
     })
-  })
-}
-
-/* html checker */
-let htmlFileCheckerPromise = (publish) => {
-  if (publish.debug) { Debug() }
-  return new Promise((resolve, reject) => {
-    Fs.access(`${publish.path}/${publish.json.name}.html`, Fs.constants.F_OK, (err) => {
-      if (err && !publish.projectPath) {
-        return reject(new Error(`reference html file not found in your module`))
-      } else if (err || publish.htmlChecker) {
-        Html.conflictSolverPromise(`${publish.projectPath}`, publish.json.mainClass)
-        .then(patternList => {
-          if (!patternList.length) { return reject(new Error(`main class not found in your project`)) }
-          let data = ''
-          let alreadyAdded = []
-          for (let pattern of patternList) {
-            if (!alreadyAdded.includes(pattern.str)) {
-              data += `<!--============= pattern found in ${pattern.file}-->\n${pattern.str}\n<!--============= end of pattern-->\n\n`
-              alreadyAdded.push(pattern.str)
-            }
-          }
-          Fs.writeFile(`${publish.path}/${publish.json.name}.html`, data, err => {
-            if (err) { return reject(err) }
-            return reject(new Error(`conflicts identified in your file - please validate ${publish.json.name}.html and publish again`))
-          })
-        })
-        .catch(reject)
-      } else {
-        Html.validatorPromise(`${publish.path}/${publish.json.name}.html`, publish.json.mainClass)
-        .then(pattern => {
-          publish.dom = pattern[0].str
-          return resolve(publish)
-        })
-        .catch(reject)
-      }
-    })
+    .catch(reject)
   })
 }
 
@@ -316,8 +284,9 @@ let checkModuleFilesPromise = (publish) => {
   if (publish.debug) { Debug() }
   return new Promise((resolve, reject) => {
     let promises = []
-    promises.push(htmlFileCheckerPromise(publish))
-    promises.push(Css.cssFileCheckerPromise(publish))
+    promises.push(Html.fileCheckerPromise(publish))
+    promises.push(Css.fileCheckerPromise(publish))
+    promises.push(Js.fileCheckerPromise(publish))
     Promise.all(promises)
     .then(() => {
       return resolve(publish)
@@ -330,6 +299,7 @@ let checkModuleFilesPromise = (publish) => {
 let confirmationPublishPromise = (publish) => {
   if (publish.debug) { Debug() }
   return new Promise((resolve, reject) => {
+    if (publish.force) { return resolve(publish) }
     console.log(`You are about to publish the module ${publish.name}@${publish.version}\nif you have the rights to publish, your contribution will be added in spm registry`)
     Common.promptConfirmation(publish, true, 'Do you confirm this ')
     .then(resolve)
@@ -350,6 +320,22 @@ let promptUserPromise = (publish) => {
   })
 }
 
+/* create a tmp tgz file for the future read stream */
+let createTgzPromise = (publish) => {
+  if (publish.debug) { Debug() }
+  return new Promise((resolve, reject) => {
+    Fs.mkdir(`${publish.path}/.tmp_spm_publish`, err => {
+      if (err && err.code !== 'EEXIST') { return reject(err) }
+      Common.tgzFilePromise(`${publish.path}/.tmp_spm`, `${publish.path}/.tmp_spm_publish/${publish.name}.tgz`,
+        (path, stat) => !['.tmp_spm/spm_modules'].includes(path))
+      .then(() => {
+        return resolve(publish)
+      })
+      .catch(reject)
+    })
+  })
+}
+
 /* Prepares payload and sends content to spm registry - handles api replies */
 let sendPublicationToRegistryPromise = (publish) => {
   if (publish.debug) { Debug() }
@@ -363,7 +349,8 @@ let sendPublicationToRegistryPromise = (publish) => {
         main: publish.json.mainClass,
         classes: publish.json.classes,
         description: publish.json.description,
-        entry: publish.json.files.style,
+        ssEntry: publish.json.files.style,
+        jsEntry: publish.json.files.script,
         dependencies: publish.json.dependencies,
         scripts: publish.json.scripts,
         repository: publish.json.repository,
@@ -377,7 +364,6 @@ let sendPublicationToRegistryPromise = (publish) => {
     }
     if (publish.debug) console.log('package', formData.package)
     formData.module = Fs.createReadStream(`${publish.path}/.tmp_spm_publish/${publish.name}.tgz`)
-
     let spinner = new Spinner('sending to registry...', 'monkey')
     spinner.start()
     Request.put({
@@ -408,13 +394,15 @@ let sendPublicationToRegistryPromise = (publish) => {
 
 /* cleans publish workspace */
 let cleanWorkspacePromise = (publish) => {
+  if (publish.debug) { Debug() }
   return new Promise((resolve, reject) => {
-    Common.deleteFolderRecursivePromise(`${publish.path}/.tmp_spm`)
+    Common.deleteFolderRecursivePromise(`${publish.path}/.tmp_spm`, true)
     .then(() => {
-      Common.deleteFolderRecursivePromise(`${publish.path}/.tmp_spm_publish`)
+      Common.deleteFolderRecursivePromise(`${publish.path}/.tmp_spm_publish`, true)
       .then(() => {
         return resolve(publish)
       })
+      .catch(reject)
     })
     .catch(reject)
   })
@@ -432,6 +420,7 @@ module.exports = (Program) => {
     .option('-v, --version <version>', `to specify the module's version`)
     .option('--html-checker', `to force the tool to fix conflicts between html files containing your main class`)
     .option('--debug', 'to display debug logs')
+    .option('--force', 'to pubish without confirmation if information are correct')
     .action((moduleName, options) => {
       if (options.version && typeof options.version !== 'function' && !/^[0-9]+[.][0-9]+[.][0-9]+$/.test(options.version)) {
         Program.on('--help', () => { console.log(Chalk.hex(CONST.WARNING_COLOR)('please enter a valid version number (x.x.x)')) })
@@ -451,7 +440,7 @@ module.exports = (Program) => {
         .then(Common.displayMessagesPromise)
         .then(resolve)
         .catch(err => {
-          cleanWorkspacePromise(publish, true)
+          cleanWorkspacePromise(publish)
           .then(() => { return reject(err) })
           .catch(reject)
         })
@@ -459,85 +448,3 @@ module.exports = (Program) => {
     })
   })
 }
-
-/* -------------------------- */
-
-
-/* tgz creation */
-let createTgzPromise = (publish) => {
-  if (publish.debug) { Debug() }
-  return new Promise((resolve, reject) => {
-    Fs.mkdir(`${publish.path}/.tmp_spm_publish`, err => {
-      if (err && err.code !== 'EEXIST') { return reject(err) }
-      Common.tgzFilePromise(`${publish.path}/.tmp_spm`, `${publish.path}/.tmp_spm_publish/${publish.name}.tgz`
-    // , (path, stat) => {
-    //     console.log('PATH', path, Path.relative('.tmp_spm/spm_modules', path))
-    //     return Path.relative(path, '.tmp_spm/spm_modules').startsWith('..')
-    //   }
-      )
-      .then(() => {
-        return resolve(publish)
-      })
-      .catch(reject)
-    })
-  })
-}
-
-/* many folders created during publication preparation - clean-up function */
-// let cleanUpWorkingDirectory = (publication) => {
-//   if (publication.debug) { Debug() }
-//   return new Promise((resolve, reject) => {
-//     Common.deleteFolderRecursive(`${publication.path}/.sass-cache`, () => {
-//       Common.deleteFolderRecursive(`${publication.path}/tmp`, () => {
-//         // error management ?
-//         Common.deleteFolderRecursive(`${publication.path}/.tmp`, () => {
-//           // error management ?
-//           return resolve(publication)
-//         })
-//       })
-//     })
-//   })
-// }
-
-
-// /* High level publication function -> checks, copies, compresses and sends publication to spm registry */
-// let publishModulePromise = (publication) => {
-//   if (publication.debug) { Debug() }
-//   return new Promise((resolve, reject) => {
-//     verifyIgnoredFilesPromise(publication)
-//     .then(mapDependenciesClassesPromise)
-//     .then(publicationCopyPromise)
-//     .then(checkModule)
-//     .then(createTgzPromise)
-//     .then(promptUserPromise)
-//     .then(sendPublicationToRegistryPromise)
-//     .then(resolve)
-//     .catch(reject)
-//   })
-// }
-
-/* Commander for spm publish */
-// module.exports = (Program) => {
-//   return new Promise((resolve, reject) => {
-//     Program
-//     .command('publish')
-//     .alias('p')
-//     .description('to publish your package in the spm registry')
-//     .arguments('[pkg]')
-//     .option('-a, --access <access>', 'to specify the authorization level to your module', /^(public|private)$/i, 'public')
-//     .option('--debug', 'to display debug logs')
-//     .action((pkg, options) => {
-//       let publication = new Publish(pkg, options.debug)
-//       verifyPackagePromise(publication)
-//       .then(verifyRefDomPromise)
-//       .then(verifyModulePromise)
-//       .then(confirmationPublishPromise)
-//       .then(cleanUpWorkingDirectory)
-//       .then(publishModulePromise)
-//       .then(Common.displayMessagesPromise)
-//       .then(resolve)
-//       .catch(reject)
-//     })
-//     .on('--help', function () {})
-//   })
-// }

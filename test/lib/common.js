@@ -14,7 +14,7 @@ let prepareWorkspacePromise = (basePath, targetPath) => {
     cleanWorkspacePromise(`${basePath}/${targetPath}`)
     .then(() => {
       Fs.mkdir(`${basePath}/${targetPath}`, err => {
-        if (err) { return reject(err) }
+        if (err && err.code !== 'EEXIST') { return reject(err) }
         process.chdir(`${basePath}/${targetPath}`)
         return resolve(basePath)
       })

@@ -79,6 +79,7 @@ class Publish {
     this.version = typeof options.version === 'function' ? null : options.version
     this.initialPath = Common.getCurrentPath()
     this.debug = options.debug || false
+    this.force = options.force || false
     this.access = options.access
     this.htmlChecker = options.htmlChecker
     this.warnings = []

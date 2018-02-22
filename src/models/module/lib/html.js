@@ -1,8 +1,10 @@
 const Fs = require('fs')
+const Debug = require('../../../lib/debug')
 const Validator = require('html-validator')
 
 const notClosings = ['area', 'base', 'br', 'col', 'command', 'embed', 'hr', 'img', 'input', 'keygen', 'link', 'meta', 'param', 'source', 'track', 'wbr']
 
+/* removes all comments from module's html */
 let removeComments = (data) => {
   if (!data || data.length) { return data }
   let startIndex = 0
@@ -247,7 +249,43 @@ let validatorPromise = (filePath, mainClass, validation = true, all = false) => 
   })
 }
 
+/* html checker */
+let fileCheckerPromise = (publish) => {
+  if (publish.debug) { Debug() }
+  return new Promise((resolve, reject) => {
+    Fs.access(`${publish.path}/${publish.json.name}.html`, Fs.constants.F_OK, (err) => {
+      if (err && !publish.projectPath) {
+        return reject(new Error(`reference html file not found in your module`))
+      } else if (err || publish.htmlChecker) {
+        conflictSolverPromise(`${publish.projectPath}`, publish.json.mainClass)
+        .then(patternList => {
+          if (!patternList.length) { return reject(new Error(`main class not found in your project`)) }
+          let data = ''
+          let alreadyAdded = []
+          for (let pattern of patternList) {
+            if (!alreadyAdded.includes(pattern.str)) {
+              data += `<!--============= pattern found in ${pattern.file}-->\n${pattern.str}\n<!--============= end of pattern-->\n\n`
+              alreadyAdded.push(pattern.str)
+            }
+          }
+          Fs.writeFile(`${publish.path}/${publish.json.name}.html`, data, err => {
+            if (err) { return reject(err) }
+            return reject(new Error(`conflicts identified in your file - please validate ${publish.json.name}.html and publish again`))
+          })
+        })
+        .catch(reject)
+      } else {
+        validatorPromise(`${publish.path}/${publish.json.name}.html`, publish.json.mainClass)
+        .then(pattern => {
+          publish.dom = pattern[0].str
+          return resolve(publish)
+        })
+        .catch(reject)
+      }
+    })
+  })
+}
+
 module.exports = {
-  conflictSolverPromise,
-  validatorPromise
+  fileCheckerPromise
 }

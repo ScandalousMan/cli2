@@ -6,7 +6,6 @@ let Tar = require('tar')
 let Request = require('request')
 let CONST = require('./const')
 let Sass = require('node-sass')
-const SCSS_IGNORED_CHARS = [' ', '\n', '\t']
 let Ncp = require('ncp')
 
 /* checks if a responsiveness array is correct */
@@ -130,24 +129,6 @@ let cleanValue = (str) => {
   return str.substring(i, j + 1)
 }
 
-/* whitespaces cleaner for strings */
-let removeWhitespaces = (str) => {
-  if (str.length) {
-    let i = 0
-    while (str[i] === ' ') {
-      i++
-    }
-    let j = str.length - 1
-    while (str[j] === ' ') {
-      j--
-    }
-    if (j !== 0) {
-      return str.substring(i, j + 1)
-    }
-  }
-  return str
-}
-
 /* parses a string to associate its original type */
 let variableType = (str) => {
   if (str) {
@@ -227,13 +208,13 @@ let deleteFolderRecursivePromise = (path, ignoreENOENT = false) => {
       if (err && (!ignoreENOENT || err.code !== 'ENOENT')) { return reject(err) } else if (err && err.code === 'ENOENT') { return resolve(path) }
       if (stats.isDirectory()) {
         Fs.readdir(path, (err, files) => {
-          if (err) { return reject(err) }
+          if (err && (!ignoreENOENT || err.code !== 'ENOENT')) { return reject(err) } else if (err && err.code === 'ENOENT') { return resolve(path) }
           let promises = []
-          for (let file of files) { promises.push(deleteFolderRecursivePromise(`${path}/${file}`)) }
+          for (let file of files) { promises.push(deleteFolderRecursivePromise(`${path}/${file}`, ignoreENOENT)) }
           Promise.all(promises)
           .then(() => {
             Fs.rmdir(path, err => {
-              if (err) { return reject(err) }
+              if (err && (!ignoreENOENT || err.code !== 'ENOENT')) { return reject(err) } else if (err && err.code === 'ENOENT') { return resolve(path) }
               return resolve(path)
             })
           })
@@ -241,7 +222,7 @@ let deleteFolderRecursivePromise = (path, ignoreENOENT = false) => {
         })
       } else {
         Fs.unlink(path, err => {
-          if (err) { return reject(err) }
+          if (err && (!ignoreENOENT || err.code !== 'ENOENT')) { return reject(err) } else if (err && err.code === 'ENOENT') { return resolve(path) }
           return resolve(path)
         })
       }
@@ -466,29 +447,6 @@ let findAllImportInString = (str) => {
     indexStart = i + 8
   }
   return importedFiles
-}
-
-/* removes comment and other neutral characters from css */
-let cssCleaner = (str) => {
-  if (!str || !str.length) { return str }
-  let startIndex = 0
-  let i, j
-  while ((i = str.indexOf('/*', startIndex)) >= 0) {
-    let j = str.indexOf('*/', i)
-    if (j < 0) { return str }
-    str = `${str.substring(0, i)}${str.substring(j + 2)}`
-    startIndex = i + 1
-  }
-  i = 0
-  while (i < str.length) {
-    if (SCSS_IGNORED_CHARS.includes(str[i])) {
-      j = 1
-      while (SCSS_IGNORED_CHARS.includes(str[i + j])) { j++ }
-      str = `${str.substring(0, i)} ${str.substring(i + j)}`
-    }
-    i++
-  }
-  return removeWhitespaces(str)
 }
 
 /* updates files where the package is used */
@@ -769,11 +727,9 @@ module.exports = {
   cleanValue,
   createInstancePromise,
   writeFilePromise,
-  removeWhitespaces,
   variableType,
   defineMixinName,
   findAllImportInString,
-  cssCleaner,
   updateUsedFilesPromise,
   convertScssToCss,
   displayMessagesPromise,

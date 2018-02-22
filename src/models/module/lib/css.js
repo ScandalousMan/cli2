@@ -1,9 +1,52 @@
 let Fs = require('fs')
 let Path = require('path')
+let Sass = require('node-sass')
+let Prompt = require('inquirer').prompt
 let Debug = require('../../../lib/debug')
 let Common = require('../../../lib/common')
-let Authentify = require('../../../models/user/lib/authentify')
-let Prompt = require('inquirer').prompt
+
+const SCSS_IGNORED_CHARS = [' ', '\n', '\t']
+
+/* whitespaces cleaner for strings */
+let removeWhitespaces = (str) => {
+  if (str.length) {
+    let i = 0
+    while (str[i] === ' ') {
+      i++
+    }
+    let j = str.length - 1
+    while (str[j] === ' ') {
+      j--
+    }
+    if (j !== 0) {
+      return str.substring(i, j + 1)
+    }
+  }
+  return str
+}
+
+/* removes comment and other neutral characters from css */
+let cssCleaner = (str) => {
+  if (!str || !str.length) { return str }
+  let startIndex = 0
+  let i, j
+  while ((i = str.indexOf('/*', startIndex)) >= 0) {
+    let j = str.indexOf('*/', i)
+    if (j < 0) { return str }
+    str = `${str.substring(0, i)}${str.substring(j + 2)}`
+    startIndex = i + 1
+  }
+  i = 0
+  while (i < str.length) {
+    if (SCSS_IGNORED_CHARS.includes(str[i])) {
+      j = 1
+      while (SCSS_IGNORED_CHARS.includes(str[i + j])) { j++ }
+      str = `${str.substring(0, i)} ${str.substring(i + j)}`
+    }
+    i++
+  }
+  return removeWhitespaces(str)
+}
 
 /* checks if a given selector has a valid scope included inside one of the publication's classes */
 let parseSelector = (selector, classes, dependenciesMap) => {
@@ -28,7 +71,7 @@ let parseSelector = (selector, classes, dependenciesMap) => {
 let parseSelectors = (data, classes, dependenciesMap) => {
   let parsed = data.split(',')
   for (let selector of parsed) {
-    selector = Common.removeWhitespaces(selector)
+    selector = removeWhitespaces(selector)
     if (!selector.startsWith('@') && !parseSelector(selector, classes, dependenciesMap)) {
       return false
     }
@@ -40,7 +83,7 @@ let parseSelectors = (data, classes, dependenciesMap) => {
 let checkClass = (file, data, publish) => {
   if (publish.debug) { Debug() }
   return new Promise((resolve, reject) => {
-    data = Common.cssCleaner(data)
+    data = cssCleaner(data)
     let startIndex = 0
     let i, j
     let tmpClasses = publish.json.classes.concat([publish.json.mainClass])
@@ -94,7 +137,6 @@ let importToFile = (data) => {
 let recursiveCheckModule = (filePath, publish) => {
   if (publish.debug) { Debug() }
   return new Promise((resolve, reject) => {
-    console.log(publish.path, filePath)
     if (Path.relative(publish.path, filePath).startsWith('..')) { return reject(new Error(`imported file ${filePath} out of module's scope`)) }
     Fs.readFile(filePath, 'utf8', (err, data) => {
       if (err) { return reject(err) }
@@ -150,12 +192,11 @@ let scssToCssForCheck = (publish) => {
   })
 }
 
-
 /* To confirm the deletion of declared and unused dependencies */
 let confirmDependancyRemoval = (publish) => {
   if (publish.debug) { Debug() }
   return new Promise((resolve, reject) => {
-    if (Object.keys(publish.removed).length) {
+    if (Object.keys(publish.removed).length && !publish.force) {
       let questions = [
         {
           type: 'checkbox',
@@ -211,15 +252,17 @@ let unusedDependencies = (publish) => {
 
 /* removes the files creted for scss check */
 let clearspmModulesTmpPromise = (publish) => {
+  if (publish.debug) { Debug() }
   return new Promise((resolve, reject) => {
-    Common.deleteFolderRecursivePromise(`${publish.path}/.tmp_spm/.sass_spm`)
-    .then(() => resolve(publish))
+    Common.deleteFolderRecursivePromise(`${publish.path}/.tmp_spm/.sass_spm`, true)
+    .then(() => { return resolve(publish) })
     .catch(reject)
   })
 }
 
 /* css checker */
-let cssFileCheckerPromise = (publish) => {
+let fileCheckerPromise = (publish) => {
+  if (publish.debug) { Debug() }
   return new Promise((resolve, reject) => {
     publish.ressources = []
     recursiveCheckModule(`${publish.path}/${publish.json.files.style}`, publish)
@@ -232,5 +275,5 @@ let cssFileCheckerPromise = (publish) => {
 }
 
 module.exports = {
-  cssFileCheckerPromise
+  fileCheckerPromise
 }

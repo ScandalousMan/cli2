@@ -38,8 +38,8 @@ describe('f° Interceptor on', () => {
 })
 /* importing all the test categories */
 importTest('model USER', './models/USER/test')
-// importTest('model PROJECT', './models/PROJECT/test')
-// importTest('model MODULE', './models/MODULE/test')
+importTest('model PROJECT', './models/PROJECT/test')
+importTest('model MODULE', './models/MODULE/test')
 /* stoping the interceptor */
 describe('f° Interceptor off', () => {
   it('done', () => {

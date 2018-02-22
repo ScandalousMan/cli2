@@ -40,5 +40,7 @@ module.exports = {
   PREFERENCES: 'api.spm-style.com',
   // SEARCH_RESULTS: 20,
   PROJECT_JSON_NAME: 'project-spm.json',
-  MODULE_JSON_NAME: 'module-spm.json'
+  MODULE_JSON_NAME: 'module-spm.json',
+  INSTANCE_PREFIX: '$_',
+  EXPORT_PREFIX: '$$_'
 }

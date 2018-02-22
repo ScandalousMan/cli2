@@ -61,8 +61,30 @@ module.exports = (dir) => {
     .catch(console.log)
     Program.parse([cmd, 'module', 'detail'])
   })
+  it('publish', done => {
+    Fs.writeFile('testModule.html', '<h2 class="moduleTest">B</h2>', err => {
+      if (err) { console.log(err) }
+      Fs.writeFile('testModule.css', '.moduleTest {color: red;}', err => {
+        if (err) { console.log(err) }
+        Fs.writeFile('testModule.js', 'let $_x = 32;console.log($_x)', err => {
+          if (err) { console.log(err) }
+          sinon.spy(console, 'log')
+          let Program = rewire('commander')
+          moduleLib.publish(Program)
+          .then(() => {
+            let args = console.log.args[console.log.args.length - 2][console.log.args[console.log.args.length - 1].length - 1]
+            console.log.restore()
+            expect(args).to.includes('testTravis_testModule@1.0.0 has been successfully created')
+            done()
+          })
+          .catch(console.log)
+          Program.parse([cmd, 'module', 'publish', '--version', '1.0.0', '--force', '--debug'])
+        })
+      })
+    })
+  })
   it('clean test workSpace', done => {
-    testCommon.cleanWorkspacePromise(`${dir}/test/models/MODULE/files`)
+    testCommon.cleanWorkspacePromise(`${dir}/test/models/MODULE/files/testModule`)
     .then(() => done())
     .catch(console.log)
   })
