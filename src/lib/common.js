@@ -94,13 +94,12 @@ let getJsonFilePromise = (filePath) => { // old name getPackageSpmFilePromise
 }
 
 /* downloads packages from spm registry */
-let downloadModuleSpmPromise = (name, version, targetPath) => {
+let downloadModuleSpmPromise = (name, version, targetPath, source = false) => {
   return new Promise((resolve, reject) => {
-    let url = `http://api.spm-style.com/module/${name}/${version}`
     if (!targetPath.startsWith('/')) { targetPath = `${__dirname}/${targetPath}` }
     Fs.mkdir(targetPath, err => {
       if (err && err.code !== 'EEXIST') { return reject(err) }
-      Request.get(url)
+      Request.get(`${CONST.PUBLISH_URL}/${name}/${version}${source ? '/clone' : ''}`)
       .on('response', res => {
         if (res.statusCode >= 400) { return reject(new Error(`${res.statusMessage} - CDN`)) }
       })

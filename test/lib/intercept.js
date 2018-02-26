@@ -25,6 +25,11 @@ const requestsToIntercept = {
         name: 'testTravis_testModule',
         version: '1.0.0'
       }
+    },
+    '/package/install/testTravis_testModule': {
+      GET: {
+        version: '1.0.0'
+      }
     }
   },
   'validator.w3.org': {

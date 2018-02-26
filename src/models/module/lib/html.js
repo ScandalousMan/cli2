@@ -253,7 +253,7 @@ let validatorPromise = (filePath, mainClass, validation = true, all = false) => 
 let fileCheckerPromise = (publish) => {
   if (publish.debug) { Debug() }
   return new Promise((resolve, reject) => {
-    Fs.access(`${publish.path}/${publish.json.name}.html`, Fs.constants.F_OK, (err) => {
+    Fs.access(`${publish.path}/${publish.json.files.index}`, Fs.constants.F_OK, (err) => {
       if (err && !publish.projectPath) {
         return reject(new Error(`reference html file not found in your module`))
       } else if (err || publish.htmlChecker) {
@@ -268,14 +268,14 @@ let fileCheckerPromise = (publish) => {
               alreadyAdded.push(pattern.str)
             }
           }
-          Fs.writeFile(`${publish.path}/${publish.json.name}.html`, data, err => {
+          Fs.writeFile(`${publish.path}/${publish.json.files.index}`, data, err => {
             if (err) { return reject(err) }
-            return reject(new Error(`conflicts identified in your file - please validate ${publish.json.name}.html and publish again`))
+            return reject(new Error(`conflicts identified in your file - please validate ${publish.json.files.index} and publish again`))
           })
         })
         .catch(reject)
       } else {
-        validatorPromise(`${publish.path}/${publish.json.name}.html`, publish.json.mainClass)
+        validatorPromise(`${publish.path}/${publish.json.files.index}`, publish.json.mainClass)
         .then(pattern => {
           publish.dom = pattern[0].str
           return resolve(publish)

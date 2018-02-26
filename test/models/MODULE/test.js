@@ -78,10 +78,24 @@ module.exports = (dir) => {
             done()
           })
           .catch(console.log)
-          Program.parse([cmd, 'module', 'publish', '--version', '1.0.0', '--force', '--debug'])
+          Program.parse([cmd, 'module', 'publish', '--version', '1.0.0', '--force'])
         })
       })
     })
+  })
+  it('clone', done => {
+    sinon.spy(console, 'log')
+    let Program = rewire('commander')
+    moduleLib.clone(Program)
+    .then(() => {
+      let args = console.log.args[console.log.args.length - 2][console.log.args[console.log.args.length - 1].length - 1]
+      console.log.restore()
+      expect(args).to.includes('testTravis_testModule source files imported in testTravis_testModule folder')
+      // should ask interceptor to create folder and test it with further logic
+      done()
+    })
+    .catch(console.log)
+    Program.parse([cmd, 'module', 'clone', 'testTravis_testModule'])
   })
   it('clean test workSpace', done => {
     testCommon.cleanWorkspacePromise(`${dir}/test/models/MODULE/files/testModule`)
