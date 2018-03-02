@@ -13,8 +13,8 @@ module.exports = {
   DEBUG_COLOR: '#FD7F57',
   USER_DIRECTORY: userDirectory,
   DEBUG: process.env.SPM_DEBUG === 'debug',
-  // SPM_DIRECTORY: `${userDirectory}/.spm`,
-  // REGISTRY_PATH: `${userDirectory}/.spm/registry`,
+  SPM_DIRECTORY: `${userDirectory}/.spm`,
+  REGISTRY_PATH: `${userDirectory}/.spm/registry`,
   // WARNING: {
   //   NO_PACKAGE_SPM: 'no packge-spm.json in your project',
   //   NO_SPM_MODULES: 'no spm_modules was found in your project - a new spm_modules folder was created in your current directory',
@@ -42,6 +42,7 @@ module.exports = {
   // SEARCH_RESULTS: 20,
   PROJECT_JSON_NAME: 'project-spm.json',
   MODULE_JSON_NAME: 'module-spm.json',
+  INSTANCE_FOLDER: 'spm_instances',
   INSTANCE_PREFIX: '$_',
   EXPORT_PREFIX: '$$_'
 }

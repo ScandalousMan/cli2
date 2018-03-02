@@ -13,6 +13,7 @@ class Project {
       styleguide: create.styleguideName
     }
     this.description = create.description
+    this.jsStandard = create.jsStandard
     this.dependencies = {}
   }
 }
@@ -30,6 +31,7 @@ class Create {
       ssName: `style.${options.style || 'css'}`,
       styleguideName: `styleguide.${options.style || 'css'}`,
       description: '',
+      jsStandard: 'modular',
       debug: false,
       default: false,
       force: false
@@ -47,7 +49,7 @@ class Create {
 
   /* keys used in the create prompter */
   getKeys () {
-    return ['name', 'style', 'htmlName', 'jsName', 'ssName', 'styleguideName', 'description'] // no type
+    return ['name', 'style', 'htmlName', 'jsName', 'ssName', 'styleguideName', 'description', 'jsStandard'] // no type
   }
 }
 

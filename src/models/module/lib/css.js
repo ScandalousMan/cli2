@@ -103,7 +103,8 @@ let checkClass = (file, data, publish) => {
       j = data.indexOf('@media', startIndex)
       if (j < 0 || i < j) {
         if (!parseSelectors(data.substring(startIndex, i), tmpClasses, publish.dependenciesClassesMapping) && Common.cleanValue(data.substring(startIndex, i)) !== ':root') {
-          return reject(new Error(`incorrect selector found : ${data.substring(startIndex, i)} in ${file}`))
+          // convert in css before making any check
+          // return reject(new Error(`incorrect selector found : ${data.substring(startIndex, i)} in ${file}`))
         }
         i = data.indexOf('}', i)
       }

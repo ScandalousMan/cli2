@@ -82,6 +82,7 @@ let modifyVariableJsonPromise = (edit) => {
       style: 'style',
       mainClass: 'mainClass',
       description: 'description',
+      jsStandard: 'jsStandard',
       category: 'category',
       responsive: 'responsive',
       keywords: 'keywords',
@@ -107,9 +108,10 @@ let modifyVariableJsonPromise = (edit) => {
         style: optionsToChange.style || edit.json.style,
         type: 'native',
         mainClass: optionsToChange.mainClass || edit.json.mainClass,
-        description: optionsToChange.description ? optionsToChange.description : edit.json.description,
-        category: optionsToChange.category ? optionsToChange.category : edit.json.category,
-        responsive: optionsToChange.responsive ? optionsToChange.responsive : edit.json.responsive,
+        description: optionsToChange.description || edit.json.description,
+        jsStandard: optionsToChange.jsStandard || edit.json.jsStandard,
+        category: optionsToChange.category || edit.json.category,
+        responsive: optionsToChange.responsive || edit.json.responsive,
         keywords: optionsToChange.keywords || edit.json.keywords,
         dependencies: edit.json.dependencies,
         files: {
@@ -118,9 +120,9 @@ let modifyVariableJsonPromise = (edit) => {
           style: optionsToChange.ssName || edit.json.files.style
         },
         classes: optionsToChange.classes || edit.json.classes,
-        readme: optionsToChange.readme ? optionsToChange.readme : edit.json.readme,
-        repository: optionsToChange.repository ? optionsToChange.repository : edit.json.repository,
-        license: optionsToChange.license ? optionsToChange.license : edit.json.license,
+        readme: optionsToChange.readme || edit.json.readme,
+        repository: optionsToChange.repository || edit.json.repository,
+        license: optionsToChange.license || edit.json.license,
         contributors: edit.json.contributors
       }
       return resolve(edit)
@@ -174,6 +176,7 @@ module.exports = (Program) => {
     .option('--style <style>', `to configure the module's style`)
     .option('--main-class <mainClass>', `to configure the module's main class`)
     .option('--description <description>', `to configure the module's description`)
+    .option('--js-standard <standard>', `to configure the module's javascript standard`)
     .option('--category <category>', `to configure the modules's category`)
     .option('--responsive <devices>', `to configure the modules's devices`, Common.optionList)
     .option('--keywords <keywords>', `to configure the module's keywords`, Common.optionList)
@@ -196,6 +199,9 @@ module.exports = (Program) => {
         Program.help()
       } else if (options.responsive && !Common.checkCorrectResponsiveness(options.responsive)) {
         Program.on('--help', () => { console.log(Chalk.hex(CONST.WARNING_COLOR)('authorized responsive values: watch, mobile, phablet, tablet, laptop, screenXl')) })
+        Program.help()
+      } else if (options.jsStandard && !['legacy', 'modular'].includes(options.jsStandard)) {
+        Program.on('--help', () => { console.log(Chalk.hex(CONST.WARNING_COLOR)('authorized javascript standard: modular or legacy')) })
         Program.help()
       } else {
         let edit = {

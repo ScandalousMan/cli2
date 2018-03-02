@@ -28,7 +28,7 @@ module.exports = (dir) => {
             for (let file of expectedFiles) { expect(files).to.include(file) }
             Common.getJsonFilePromise('project-spm.json')
             .then(json => {
-              expect(json).to.have.all.keys('name', 'style', 'type', 'files', 'description', 'dependencies')
+              expect(json).to.have.all.keys('name', 'style', 'type', 'files', 'description', 'jsStandard', 'dependencies')
               expect(json.name).to.equal('files')
               done()
             })
@@ -60,7 +60,7 @@ module.exports = (dir) => {
     .then(() => {
       let args = console.log.args[console.log.args.length - 1][console.log.args[console.log.args.length - 1].length - 1]
       console.log.restore()
-      expect(args).to.equal(`{\n  "name": "files",\n  "style": "scss",\n  "type": "native",\n  "files": {\n    "index": "index.html",\n    "script": "script.js",\n    "style": "style.css",\n    "styleguide": "styleguide.css"\n  },\n  "description": "",\n  "dependencies": {}\n}`)
+      expect(args).to.equal(`{\n  "name": "files",\n  "style": "scss",\n  "type": "native",\n  "files": {\n    "index": "index.html",\n    "script": "script.js",\n    "style": "style.css",\n    "styleguide": "styleguide.css"\n  },\n  "description": "",\n  "jsStandard": "modular",\n  "dependencies": {}\n}`)
       done()
     })
     .catch(console.log)

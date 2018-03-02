@@ -187,7 +187,7 @@ let processIgnoredFilesPromise = (publish) => {
   return new Promise((resolve, reject) => {
     parseIgnoreFilePromise(publish)
     .then(ignoredFiles => {
-      publish.ignores = ['.tmp_spm', '.gitignore', '.npmignore', 'module-spm.json', `${publish.json.files.index}`].concat(ignoredFiles)
+      publish.ignores = ['.tmp_spm', '.gitignore', '.npmignore', 'module-spm.json', `${publish.json.files.index}`, `spm_modules`].concat(ignoredFiles)
       return resolve(publish)
     })
     .catch(reject)
@@ -346,7 +346,7 @@ let sendPublicationToRegistryPromise = (publish) => {
         version: publish.version,
         type: publish.json.type,
         style: publish.json.style,
-        main: publish.json.mainClass,
+        mainClass: publish.json.mainClass,
         classes: publish.json.classes,
         description: publish.json.description,
         ssEntry: publish.json.files.style,

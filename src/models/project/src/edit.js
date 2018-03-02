@@ -68,7 +68,8 @@ let modifyVariableJsonPromise = (edit) => {
       jsName: 'scriptFile',
       ssName: 'styleFile',
       styleguideName: 'styleguideFile',
-      description: 'description'
+      description: 'description',
+      jsStandard: 'jsStandard'
     }
     for (let option in optionsMap) {
       if (edit.options[option] && typeof edit.options[option] !== 'function') {
@@ -88,6 +89,7 @@ let modifyVariableJsonPromise = (edit) => {
           styleguide: optionsToChange.styleguideName || edit.json.files.styleguide
         },
         description: optionsToChange.description || edit.json.description,
+        jsStandard: optionsToChange.jsStandard || edit.json.jsStandard,
         dependencies: edit.json.dependencies
       }
       return resolve(edit)
@@ -142,8 +144,9 @@ module.exports = (Program) => {
     .option('--js-name <jsFile>', `to configure the project's javascript file`)
     .option('--ss-name <ssFile>', `to configure the project's stylesheet file`)
     .option('--styleguide-name <styleguideFile>', `to configure the project's styleguide file`)
-    .option('--dependencies-rm <dependencies>', 'to configure the project dependencies', Common.optionList)
     .option('--description <description>', `to configure the project's description`)
+    .option('--jsStandard <standard>', `to configure the project's standard (modular or legacy)`)
+    .option('--dependencies-rm <dependencies>', 'to configure the project dependencies', Common.optionList)
     .option('--debug', 'to display debug logs')
     .action(options => {
       let edit = {

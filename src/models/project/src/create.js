@@ -78,6 +78,13 @@ let createProjectPromise = (create) => {
       description: {
         name: 'description',
         message: 'description'
+      },
+      jsStandard: {
+        name: 'jsStandard',
+        message: 'chose your js standard : legacy only recommended for native script',
+        type: 'list',
+        choices: ['legacy', 'modular'],
+        default: 'modular'
       }
     }
     let questions = []
@@ -193,6 +200,7 @@ module.exports = (Program) => {
     .option('--ss-name <ssFile>', `to configure the project's stylesheet file`)
     .option('--styleguide-name <styleguideFile>', `to configure the project's styleguide file`)
     .option('--description <description>', `to configure the project's description`)
+    .option('--js-standard <standard>', `to chose between modular and legacy standard`)
     .option('--no-ss-file', 'to prevent creating the spm stylesheet')
     .option('--no-styleguide-file', 'to prevent creating the spm styleguide')
     .option('--no-js-file', 'to prevent creating the spm javascript file')

@@ -59,6 +59,13 @@ let createModulePromise = (create) => {
           return (value.length > 0) ? true : Chalk.hex(CONST.WARNING_COLOR)('description is required')
         }
       },
+      jsStandard: {
+        name: 'jsStandard',
+        type: 'list',
+        choice: ['modular', 'legacy'],
+        default: 'modular',
+        message: 'chose your js standard : legacy only recommended for native script'
+      },
       category: {
         name: 'category',
         message: 'category'
@@ -242,6 +249,7 @@ module.exports = (Program) => {
     .option('--style <style>', `to configure the module's style`)
     .option('--main-class <mainClass>', `to configure the module's main class`)
     .option('--description <description>', `to configure the module's description`)
+    .option('--js-standard <standard>', `to configure the module's standard (legacy or modular)`)
     .option('--category <category>', `to configure the module's category`)
     .option('--responsive <devices>', `to configure the module's responsiveness`, Common.optionList, [])
     .option('--keywords <keywords>', `to configure the module's keywords`, Common.optionList, [])
@@ -270,6 +278,9 @@ module.exports = (Program) => {
         Program.help()
       } else if (options.responsive && !Common.checkCorrectResponsiveness(options.responsive)) {
         Program.on('--help', () => { console.log(Chalk.hex(CONST.WARNING_COLOR)('authorized responsive values: watch, mobile, phablet, tablet, laptop, screenXl')) })
+        Program.help()
+      } else if (options.jsStandard && !['legacy', 'modular'].includes(options.jsStandard)) {
+        Program.on('--help', () => { console.log(Chalk.hex(CONST.WARNING_COLOR)('authorized javascript standard: modular or legacy')) })
         Program.help()
       } else {
         let create = new Models.Create(name, options)

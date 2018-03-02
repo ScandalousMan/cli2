@@ -364,55 +364,76 @@ let defineMixinName = (filePath) => {
   return res.substring(0, res.length - 5)
 }
 
-/* checks mixins, maps variables in content and generates a parameter list for a mixin */
-let parametersInstanceParsingPromise = (name, entryPath, parameters, packageClasses) => {
-  return new Promise((resolve, reject) => {
-    let variables = []
-    let variableObject = {}
-    Fs.readFile(entryPath, 'utf8', (err, data) => {
-      if (err) { return reject(err) } else {
-        let i = data.indexOf(`@mixin spm-class_${parameters.target.name}(`)
-        if (i < 0) { return reject(new Error(`Missing mixin ${parameters.target.name} in ${entryPath}`)) }
-        i = data.indexOf('(', i)
-        let j = data.indexOf(')', i)
-        let table = data.substring(i + 1, j).split(',')
-        for (let index = 0; index < table.length - 1; index++) {
-          if (!table[index].startsWith('$local-') || !Object.keys(variableObject).includes(table[index].substring(7))) {
-            return reject(new Error(`wrong parameters in ${entryPath} mixins`))
-          }
-          let content = {
-            name: table[index].substring(7),
-            value: variableObject[table[index].substring(7)]
-          }
-          variableObject[table[index].substring(7)] = content
-          variables.push(content)
-        }
-        for (let item of parameters.target.variables) {
-          if (!variableObject[item.name]) { return reject(new Error(`Incorrect instance variables in ${entryPath} - ${item}`)) }
-          variableObject[item.name].value = item.value
-        }
-        let res = ''
-        for (let parameter of variables) {
-          res += `${parameter.value},`
-        }
-        res += `'${name}'`
-        return resolve(res)
-      }
-    })
-  })
-}
+// /* checks mixins, maps variables in content and generates a parameter list for a mixin */
+// let parametersInstanceParsingPromise = (name, entryPath, parameters, packageClasses) => {
+//   return new Promise((resolve, reject) => {
+//     let variables = []
+//     let variableObject = {}
+//     Fs.readFile(entryPath, 'utf8', (err, data) => {
+//       if (err) { return reject(err) } else {
+//         let i = data.indexOf(`@mixin spm-class_${parameters.target.name}(`)
+//         if (i < 0) { return reject(new Error(`Missing mixin ${parameters.target.name} in ${entryPath}`)) }
+//         i = data.indexOf('(', i)
+//         let j = data.indexOf(')', i)
+//         let table = data.substring(i + 1, j).split(',')
+//         for (let index = 0; index < table.length - 1; index++) {
+//           if (!table[index].startsWith('$local-') || !Object.keys(variableObject).includes(table[index].substring(7))) {
+//             return reject(new Error(`wrong parameters in ${entryPath} mixins`))
+//           }
+//           let content = {
+//             name: table[index].substring(7),
+//             value: variableObject[table[index].substring(7)]
+//           }
+//           variableObject[table[index].substring(7)] = content
+//           variables.push(content)
+//         }
+//         for (let item of parameters.target.variables) {
+//           if (!variableObject[item.name]) { return reject(new Error(`Incorrect instance variables in ${entryPath} - ${item}`)) }
+//           variableObject[item.name].value = item.value
+//         }
+//         let res = ''
+//         for (let parameter of variables) {
+//           res += `${parameter.value},`
+//         }
+//         res += `'${name}'`
+//         return resolve(res)
+//       }
+//     })
+//   })
+// }
 
 /* generates scss instance input and file */
-let createInstancePromise = (name, target, entry, parameters, packageClasses) => {
+let createInstancePromise = (install) => {
   return new Promise((resolve, reject) => {
-    parametersInstanceParsingPromise(name, `${target}/${entry}`, parameters, packageClasses)
-    .then(parametersList => {
-      let data = `@import '../${entry}';\n\n@include spm-class_${parameters.target.name}(${parametersList});\n`
-      Fs.writeFile(`{target}/dist/${name}.scss`, data, err => {
-        if (err) { return reject(err) } else { return resolve(name) }
+    Fs.readFile(`${install.pathFinal}/${CONST.INSTANCE_FOLDER}/${CONST.INSTANCE_FOLDER}.scss`, 'utf8', (err, data) => {
+      if (err && err.code !== 'ENOENT') { return reject(err) } else if (err) {
+        // create the file from scratch
+        let importData = ''
+        let includeData = ''
+        for (let module of install.finalInstances) {
+          module.variableMap = {}
+          module.classParameters = []
+          for (let moduleClass of module.json.classes) {
+            module.classParameters.push(moduleClass.name)
+            for (let variableItem of moduleClass.variables) { module.variableMap[variableItem.name] = variableItem.value }
+          }
+          let ssParameters = ''
+          let classParameters = ''
+          for (let param of module.ssParameters) { ssParameters += `${module.variableMap[param]},` }
+          for (let moduleClass of module.classParameters) { classParameters += `'${moduleClass}',` }
+          classParameters = classParameters.slice(0, -1)
+          importData += `@import '../spm_modules/${module.name}/${module.json.files.style}';\n`
+          includeData += `@include ${module.name}(${ssParameters}${classParameters});\n`
+        }
+        data = `${importData}\n${includeData}`
+      } else {
+        // add in folder the correct instances
+      }
+      Fs.writeFile(`${install.pathFinal}/${CONST.INSTANCE_FOLDER}/${CONST.INSTANCE_FOLDER}.scss`, data, err => {
+        if (err) { return reject(err) }
+        return resolve(module)
       })
     })
-    .catch(reject)
   })
 }
 
@@ -532,19 +553,16 @@ let updateUsedFilesPromise = (use) => {
 }
 
 /* turns a scss file into a css file and removes scss files + map */
-let convertScssToCss = (item, path, file) => {
+let convertScssToCss = (input, output) => {
   return new Promise((resolve, reject) => {
     Sass.render({
-      file: `${path}/${file}.scss`,
-      outFile: `${path}/${file}.css`
+      file: input,
+      outFile: output
     }, function (err, result) {
       if (err) { return reject(err) }
-      Fs.writeFile(`${path}/${file}.css`, result.css, err => {
+      Fs.writeFile(output, result.css, err => {
         if (err) { return reject(err) }
-        Fs.rename(`${path}/${file}.scss`, `${path}/src/${file}.scss`, err => {
-          if (err) { return reject(err) }
-          return resolve(item)
-        })
+        return resolve(output)
       })
     })
   })

@@ -12,6 +12,7 @@ class Module {
     this.type = create.type
     this.mainClass = create.mainClass
     this.description = create.description
+    this.jsStandard = create.jsStandard
     this.category = create.category
     this.responsive = create.responsive
     this.keywords = create.keywords
@@ -40,6 +41,7 @@ class Create {
       type: 'native',
       mainClass: name,
       description: '',
+      jsStandard: 'modular',
       category: '',
       responsive: ['mobile', 'phablet', 'tablet', 'laptop', 'screenXl'],
       keywords: [],
@@ -68,7 +70,7 @@ class Create {
 
   /* keys used in the create prompter */
   getKeys () {
-    return ['version', 'style', 'mainClass', 'description', 'repository', 'license', 'keywords', 'classes', 'htmlName', 'ssName', 'jsName']
+    return ['version', 'style', 'mainClass', 'description', 'jsStandard', 'repository', 'license', 'keywords', 'classes', 'htmlName', 'ssName', 'jsName']
   }
 }
 
@@ -87,8 +89,56 @@ class Publish {
   }
 }
 
+/* INSTALL object */
+class Install {
+  constructor (names, options) {
+    this.isRegistry = options.registry !== undefined
+    this.isLocal = options.local !== undefined
+    this.isSave = options.save !== undefined
+    this.isDev = options.dev !== undefined
+    this.isProd = options.prod !== undefined
+    this.isForce = options.force !== undefined
+    this.names = names
+    this.style = options.style
+    this.pathInitial = null
+    this.pathProject = null
+    this.pathModule = null
+    this.pathModules = null
+    this.pathRegistry = null
+    this.pathFinal = null
+    this.pathJson = null
+    this.current = {
+      arborescence: {},
+      jsonFile: {
+        dependencies: {}
+      }
+    }
+    this.downloadList = []
+    this.symlinkList = []
+    // this.instancesList = []
+    this.finalInstances = []
+    this.downloadPromises = []
+    this.symlinkPromises = []
+    this.directoryList = []
+    this.warnings = []
+    this.successes = []
+    this.debug = options.debug === true
+  }
+  /* creates a list of dependencies if install has args */
+  addDependenciesNames (names) {
+    for (let name of names) {
+      if (name.indexOf('@') > 0) {
+        this.current.jsonFile.dependencies[name.split('@')[0]] = name.split('@')[1]
+      } else {
+        this.current.jsonFile.dependencies[name] = true
+      }
+    }
+  }
+}
+
 module.exports = {
   Module,
   Create,
-  Publish
+  Publish,
+  Install
 }
