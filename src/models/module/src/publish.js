@@ -9,8 +9,8 @@ let Models = require('../lib/models')
 let CONST = require('../../../lib/const')
 let Debug = require('../../../lib/debug')
 let Common = require('../../../lib/common')
-let Authentify = require('../../../models/user/lib/authentify')
-let Spinner = require('../../../models/user/lib/spinner')
+let Spinner = require('../../user/lib/spinner')
+let Authentify = require('../../user/lib/authentify')
 
 /* Detect if in the scope of a project */
 let testProjectScopePromise = (publish) => {
