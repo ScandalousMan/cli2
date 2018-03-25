@@ -180,8 +180,59 @@ let processModularDependenciesPromise = (install) => {
 
 /* creates or updates the adequate js instance file */
 let generateInstancePromise = (generate) => {
+  if (generate.debug) { Debug() }
   return new Promise((resolve, reject) => {
-    return resolve(generate)
+    Fs.mkdir(`${generate.pathFinal}/${CONST.INSTANCE_FOLDER}`, err => {
+      if (err && err.code !== 'EEXIST') { return reject(err) }
+      Fs.readFile(`${generate.pathFinal}/${CONST.INSTANCE_FOLDER}/${CONST.INSTANCE_FOLDER}.js`, 'utf8', (err, data) => {
+        if (err && err.code !== 'ENOENT') { return reject(err) } else if (err) { data = '' }
+        let path = Path.relative(Path.dirname(`${generate.pathFinal}/${CONST.INSTANCE_FOLDER}/${CONST.INSTANCE_FOLDER}.js`), `${generate.pathFinal}/spm_modules/${generate.moduleName}/${generate.jsonFile.files.script}`)
+        if (generate.jsStandard) {
+          if (data.indexOf(`import { ${generate.upperName} } from '${path}'\n`) === -1) {
+            let startIndex = -1
+            let endIndex = 0
+            while ((startIndex = data.indexOf('import', startIndex + 1)) >= 0) {
+              if ((endIndex = data.indexOf('\'\n', startIndex)) === -1) { return reject(new Error('issue in instance file')) }
+            }
+            data = `${data.substring(0, endIndex + 2)}import { ${generate.upperName} } from '${path}'\n${data.substring(endIndex + 2)}`
+          }
+        }
+        let parameters = ''
+        for (let jsVar of generate.jsonFile.js.instancesVar) {
+          parameters += `${generate.variablesMap[jsVar.name].to || generate.variablesMap[jsVar.name].from},`
+        }
+        if (parameters.endsWith(',')) { parameters = parameters.slice(0, -1) }
+        data += `${generate.assign && generate.jsStandard === 'modular' ? 'export ' : ''}${generate.assign ? 'let ' + generate.nickname + ' = ' : ''}new ${generate.upperName}(${parameters})\n`
+        Fs.writeFile(`${generate.pathFinal}/${CONST.INSTANCE_FOLDER}/${CONST.INSTANCE_FOLDER}.js`, data, err => {
+          if (err) { return reject(err) }
+          if (generate.jsStandard === 'modular' && generate.assign) {
+            Fs.readFile(`${generate.pathFinal}/${generate.jsonFile.files.script}`, 'utf8', (err, data) => {
+              let tmpData = data
+              if (err && err.code !== 'ENOENT') { return reject(err) } else if (err) { return resolve(generate) }
+              let path = Path.relative(Path.dirname(`${generate.pathFinal}/${generate.jsonFile.files.script}`), `${generate.pathFinal}/${CONST.INSTANCE_FOLDER}`)
+              let regex = new RegExp(`import {.{1,}} from '${path}/spm_instances'\n`)
+              let details = regex.exec(data)
+              let extract
+              if (details && details.index !== undefined) {
+                let startIndex = data.indexOf('{', details.index)
+                let endIndex = data.indexOf('}', details.index)
+                extract = data.substring(startIndex + 2, endIndex - 1).split(', ')
+                if (!extract.includes(generate.nickname)) { extract.push(generate.nickname) }
+                data = `${data.substring(0, startIndex + 2)}${extract.join(', ')}${data.substring(endIndex - 1)}`
+              } else {
+                data = `import { ${generate.nickname} } from '${path}/spm_instances'\n\n${data}`
+              }
+              if (data !== tmpData) {
+                Fs.writeFile(`${generate.pathFinal}/${generate.jsonFile.files.script}`, data, err => {
+                  if (err) { return reject(err) }
+                  return resolve(generate)
+                })
+              } else { return resolve(generate) }
+            })
+          } else { return resolve(generate) }
+        })
+      })
+    })
   })
 }
 

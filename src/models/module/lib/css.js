@@ -362,9 +362,9 @@ let convertScssToCss = (input, output) => {
 
 /* creates or updates the adequate scss instance file plus generates the css if needed */
 let generateInstancePromise = (generate) => {
-  if (generate.debug) { Debug() }
+  if (generate.debug) { Debug(generate) }
   return new Promise((resolve, reject) => {
-    Fs.readFile(`${generate.pathModules}/${generate.moduleName}/${generate.jsonFile.files.style}`, 'utf8', (err, data) => {
+    Fs.readFile(`${generate.pathFinal}/spm_modules/${generate.moduleName}/${generate.jsonFile.files.style}`, 'utf8', (err, data) => {
       try {
         if (err) { return reject(err) }
         let parameters = ''
@@ -372,36 +372,31 @@ let generateInstancePromise = (generate) => {
         i = data.indexOf('(', i)
         let j = data.indexOf(')', i)
         for (let parameter of data.substring(i + 1, j).split(',')) {
-          parameter = Common.removeWhitespaces(parameter)
-          if (parameter.startsWith('$local-')) {
-            if (!generate.variablesMap[parameter.substring(7)]) { generate.variablesMap[parameter.substring(7)] = `$_${parameter.substring(7)}` }
-            parameters += `${generate.variablesMap[parameter.substring(7)].to || generate.variablesMap[parameter.substring(7)].from},`
-          } else if (parameter.startsWith('$mixin-local-')) {
-            parameters += `'${generate.nicknames[parameter.substring(13)]}',`
+          parameter = removeWhitespaces(parameter)
+          if (parameter.startsWith(CONST.INSTANCE_PREFIX)) {
+            if (!generate.variablesMap[parameter.substring(CONST.INSTANCE_PREFIX.length)]) { generate.variablesMap[parameter.substring(CONST.INSTANCE_PREFIX.length)] = `$_${parameter.substring(CONST.INSTANCE_PREFIX.length)}` }
+            parameters += `${generate.variablesMap[parameter.substring(CONST.INSTANCE_PREFIX.length)].to || generate.variablesMap[parameter.substring(CONST.INSTANCE_PREFIX.length)].from},`
           } else {
-            return reject(new Error(`wrong parameter ${parameter} in module entry point file`))
+            parameters += `'${generate.nicknames[parameter.substring(13)]}',`
           }
         }
         if (parameters.endsWith(',')) { parameters = parameters.slice(0, -1) }
-
         Fs.readFile(`${generate.pathFinal}/${CONST.INSTANCE_FOLDER}/${CONST.INSTANCE_FOLDER}.scss`, 'utf8', (err, data) => {
           if (err && err.code !== 'ENOENT') { return reject(err) } else if (err) {
             data = `@import "../variables-spm.scss";\n@import "../${generate.jsonFile.files.style}";\n\n`
-          } else {
-
           }
-          data += `@include spm-${generate.jsonFile.main}-class(${parameters});\n`
-          Fs.writeFile(`${generate.pathModules}/${generate.moduleName}/dist/${generate.nickname}.scss`, data, err => {
+          data += `@include ${generate.moduleName}(${parameters});\n`
+          Fs.writeFile(`${generate.pathFinal}/${CONST.INSTANCE_FOLDER}/${CONST.INSTANCE_FOLDER}.scss`, data, err => {
             if (err) { return reject(err) }
             if (generate.style === 'css') {
-              Common.convertScssToCss(generate, `${generate.pathModules}/${generate.moduleName}/dist/`, generate.nickname)
+              convertScssToCss(`${generate.pathFinal}/${CONST.INSTANCE_FOLDER}/${CONST.INSTANCE_FOLDER}.scss`, `${generate.pathFinal}/${CONST.INSTANCE_FOLDER}/.${CONST.INSTANCE_FOLDER}.css`)
               .then(res => {
-                generate.successes.push(`instance ${generate.nickname}.css of module ${generate.moduleName} has been generated`)
+                generate.successes.push(`css instance ${generate.nickname} of module ${generate.moduleName} has been generated`)
                 return resolve(generate)
               })
               .catch(reject)
             } else {
-              generate.successes.push(`instance ${generate.nickname}.scss of module ${generate.moduleName} has been generated`)
+              generate.successes.push(`scss instance ${generate.nickname} of module ${generate.moduleName} has been generated`)
               return resolve(generate)
             }
           })

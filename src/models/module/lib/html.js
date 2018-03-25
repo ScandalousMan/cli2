@@ -337,7 +337,27 @@ let processInstancesPromise = (install) => {
 /* creates or updates the adequate html file */
 let generateInstancePromise = (generate) => {
   return new Promise((resolve, reject) => {
-    return resolve(generate)
+    Fs.readFile(`${generate.pathFinal}/${generate.jsonFile.files.index}`, 'utf8', (err, data) => {
+      if (err && err.code !== 'ENOENT') { return reject(err) } else if (err) { return resolve(generate) }
+      let index, start, previous, previousEnd
+      if ((index = data.indexOf('</body>')) === -1) { return resolve(generate) }
+      let path = Path.relative(Path.dirname(`${generate.pathFinal}/${generate.jsonFile.files.index}`), `${generate.pathFinal}/${CONST.INSTANCE_FOLDER}/${CONST.INSTANCE_FOLDER}.js`)
+      let jsScriptType = generate.jsStandard === 'modular' ? 'type="module" ' : ''
+      if (data.indexOf(`<script ${jsScriptType}src="${path}"></script>\n`) !== -1) {
+        start = index
+        while (start !== -1 && data[start] !== '\n') { start-- }
+        if (start === -1) { return resolve(generate) }
+        previous = start - 1
+        while (previous !== -1 && data[previous] !== '\n') { previous-- }
+        previousEnd = previous + 1
+        while ([' ', '\t'].includes(data[previousEnd])) { previousEnd++ }
+        data = `${data.substring(0, start + 1)}${data.substring(previous + 1, previousEnd)}<script ${jsScriptType}src="${path}"></script>\n${data.substring(start + 1)}`
+        Fs.writeFile(`${generate.pathFinal}/${generate.jsonFile.files.index}`, data, err => {
+          if (err) { return reject(err) }
+          return resolve(generate)
+        })
+      } else { return resolve(generate) }
+    })
   })
 }
 
