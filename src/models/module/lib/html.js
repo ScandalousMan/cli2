@@ -1,6 +1,8 @@
 const Fs = require('fs')
-const Debug = require('../../../lib/debug')
+const Path = require('path')
 const Validator = require('html-validator')
+const CONST = require('../../../lib/const')
+const Debug = require('../../../lib/debug')
 
 const notClosings = ['area', 'base', 'br', 'col', 'command', 'embed', 'hr', 'img', 'input', 'keygen', 'link', 'meta', 'param', 'source', 'track', 'wbr']
 
@@ -286,6 +288,61 @@ let fileCheckerPromise = (publish) => {
   })
 }
 
+/* updates the html files with instance file and dependencies in legacy */
+let processInstancesPromise = (install) => {
+  if (install.debug) { Debug() }
+  return new Promise((resolve, reject) => {
+    Fs.readFile(`${install.pathFinal}/${install.files.index}`, 'utf8', (err, data) => {
+      if (err && err.code !== 'ENOENT') { return reject(err) } else if (err) { return resolve(install) }
+      // <script type="module"> not operational so far with some browsers so not included in code
+      let index, start, previous, previousEnd
+      if ((index = data.indexOf('</body>')) === -1) { return resolve(install) }
+      let path = Path.relative(Path.dirname(`${install.pathFinal}/${install.files.index}`), `${install.pathFinal}/${CONST.INSTANCE_FOLDER}/${CONST.INSTANCE_FOLDER}.js`)
+      let jsScriptType = install.jsStandard === 'modular' ? 'type="module" ' : ''
+      if (data.indexOf(`<script ${jsScriptType}src="${path}"></script>\n`) !== -1) { // ${data.substring(previous + 1, previousEnd)}
+        index = data.indexOf(`<script ${jsScriptType}src="${path}"></script>\n`)
+        previous = index - 1
+        previousEnd = index
+        while (previous !== -1 && data[previous] !== '\n') { previous-- }
+        start = previous
+      } else {
+        start = index
+        while (start !== -1 && data[start] !== '\n') { start-- }
+        if (start === -1) { return resolve(install) }
+        previous = start - 1
+        while (previous !== -1 && data[previous] !== '\n') { previous-- }
+        previousEnd = previous + 1
+        while ([' ', '\t'].includes(data[previousEnd])) { previousEnd++ }
+        data = `${data.substring(0, start + 1)}${data.substring(previous + 1, previousEnd)}<script ${jsScriptType}src="${path}"></script>\n${data.substring(start + 1)}`
+      }
+      let addedContent = ''
+      for (let dependency of install.children) {
+        if (dependency.added) {
+          path = Path.relative(Path.dirname(`${install.pathFinal}/${install.files.index}`), `${dependency.path}/${dependency.files.script}`)
+          if (data.indexOf(`${data.substring(previous + 1, previousEnd)}<script ${jsScriptType}src="${path}"></script>\n`) === -1) {
+            addedContent += `${data.substring(previous + 1, previousEnd)}<script ${jsScriptType}src="${path}"></script>\n`
+          }
+        }
+      }
+      data = `${data.substring(0, start + 1)}${addedContent}${data.substring(start + 1)}`
+      Fs.writeFile(`${install.pathFinal}/${install.files.index}`, data, err => {
+        if (err) { return reject(err) }
+        return resolve(install)
+      })
+    })
+    return resolve(install)
+  })
+}
+
+/* creates or updates the adequate html file */
+let generateInstancePromise = (generate) => {
+  return new Promise((resolve, reject) => {
+    return resolve(generate)
+  })
+}
+
 module.exports = {
-  fileCheckerPromise
+  fileCheckerPromise,
+  processInstancesPromise,
+  generateInstancePromise
 }

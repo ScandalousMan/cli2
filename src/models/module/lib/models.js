@@ -98,6 +98,7 @@ class Install {
     this.isDev = options.dev !== undefined
     this.isProd = options.prod !== undefined
     this.isForce = options.force !== undefined
+    this.jsStandard = options.jsStandard || null
     this.names = names
     this.style = options.style
     this.pathInitial = null
@@ -107,30 +108,24 @@ class Install {
     this.pathRegistry = null
     this.pathFinal = null
     this.pathJson = null
-    this.current = {
-      arborescence: {},
-      jsonFile: {
-        dependencies: {}
-      }
-    }
+    this.dependencies = {}
     this.downloadList = []
     this.symlinkList = []
-    // this.instancesList = []
     this.finalInstances = []
     this.downloadPromises = []
     this.symlinkPromises = []
     this.directoryList = []
     this.warnings = []
     this.successes = []
-    this.debug = options.debug === true
+    this.debug = options.debug === true // || CONST.DEBUG
   }
   /* creates a list of dependencies if install has args */
   addDependenciesNames (names) {
     for (let name of names) {
       if (name.indexOf('@') > 0) {
-        this.current.jsonFile.dependencies[name.split('@')[0]] = name.split('@')[1]
+        this.dependencies[name.split('@')[0]] = name.split('@')[1]
       } else {
-        this.current.jsonFile.dependencies[name] = true
+        this.dependencies[name] = true
       }
     }
   }

@@ -5,7 +5,6 @@ let Path = require('path')
 let Tar = require('tar')
 let Request = require('request')
 let CONST = require('./const')
-let Sass = require('node-sass')
 let Ncp = require('ncp')
 
 /* checks if a responsiveness array is correct */
@@ -65,7 +64,7 @@ let findJsonPromise = (currentDirectory, file, stopDirectory) => {
     })
   })
 }
-/* find project-spm.json and resolve its path - null if not found */
+/* finds project-spm.json and resolves its path - null if not found */
 let findProjectJsonPromise = (currentDirectory, stopDirectory = CONST.USER_DIRECTORY) => {
   return new Promise((resolve, reject) => {
     findJsonPromise(currentDirectory, CONST.PROJECT_JSON_NAME, stopDirectory)
@@ -74,12 +73,26 @@ let findProjectJsonPromise = (currentDirectory, stopDirectory = CONST.USER_DIREC
   })
 }
 
-/* find module-spm.json and resolve its path - null if not found */
+/* finds module-spm.json and resolves its path - null if not found */
 let findModuleJsonPromise = (currentDirectory, stopDirectory = CONST.USER_DIRECTORY) => {
   return new Promise((resolve, reject) => {
     findJsonPromise(currentDirectory, CONST.MODULE_JSON_NAME, stopDirectory)
     .then(resolve)
     .catch(reject)
+  })
+}
+
+/* finds spm_modules and resolves its path - null if not found */
+let findModulesPromise = (currentDirectory, stopDirectory = CONST.USER_DIRECTORY) => {
+  return new Promise((resolve, reject) => {
+    if (!currentDirectory || currentDirectory.index(stopDirectory) === -1) { return resolve(null) }
+    Fs.stat(`${currentDirectory}/spm_modules`, (err, stats) => {
+      if (err && err !== 'ENOENT') { return reject(err) } else if (err) {
+        findModulesPromise(currentDirectory.substring(0, currentDirectory.lastIndexOf('/')), stopDirectory)
+        .then(resolve)
+        .catch(reject)
+      } else { return resolve(`${currentDirectory}/spm_modules`) }
+    })
   })
 }
 
@@ -257,16 +270,6 @@ let directoryExists = (filePath) => {
   }
 }
 
-/* directory checker as a promise */
-// let directoryExistsPromise = (filePath) => {
-//   return new Promise((resolve, reject) => {
-//     Fs.lstat(filePath, (err, stats) => {
-//       if (err && err.code !== 'ENOENT') { return reject(err) } else if (err) { return resolve(false) }
-//       return resolve(stats.isDirectory())
-//     })
-//   })
-// }
-
 /* file checker as a promise */
 let fileExistsPromise = (filePath) => {
   return new Promise((resolve, reject) => {
@@ -364,46 +367,8 @@ let defineMixinName = (filePath) => {
   return res.substring(0, res.length - 5)
 }
 
-// /* checks mixins, maps variables in content and generates a parameter list for a mixin */
-// let parametersInstanceParsingPromise = (name, entryPath, parameters, packageClasses) => {
-//   return new Promise((resolve, reject) => {
-//     let variables = []
-//     let variableObject = {}
-//     Fs.readFile(entryPath, 'utf8', (err, data) => {
-//       if (err) { return reject(err) } else {
-//         let i = data.indexOf(`@mixin spm-class_${parameters.target.name}(`)
-//         if (i < 0) { return reject(new Error(`Missing mixin ${parameters.target.name} in ${entryPath}`)) }
-//         i = data.indexOf('(', i)
-//         let j = data.indexOf(')', i)
-//         let table = data.substring(i + 1, j).split(',')
-//         for (let index = 0; index < table.length - 1; index++) {
-//           if (!table[index].startsWith('$local-') || !Object.keys(variableObject).includes(table[index].substring(7))) {
-//             return reject(new Error(`wrong parameters in ${entryPath} mixins`))
-//           }
-//           let content = {
-//             name: table[index].substring(7),
-//             value: variableObject[table[index].substring(7)]
-//           }
-//           variableObject[table[index].substring(7)] = content
-//           variables.push(content)
-//         }
-//         for (let item of parameters.target.variables) {
-//           if (!variableObject[item.name]) { return reject(new Error(`Incorrect instance variables in ${entryPath} - ${item}`)) }
-//           variableObject[item.name].value = item.value
-//         }
-//         let res = ''
-//         for (let parameter of variables) {
-//           res += `${parameter.value},`
-//         }
-//         res += `'${name}'`
-//         return resolve(res)
-//       }
-//     })
-//   })
-// }
-
-/* generates scss instance input and file */
-let createInstancePromise = (install) => {
+/* generates scss instance file */
+let createScssInstancePromise = (install) => {
   return new Promise((resolve, reject) => {
     Fs.readFile(`${install.pathFinal}/${CONST.INSTANCE_FOLDER}/${CONST.INSTANCE_FOLDER}.scss`, 'utf8', (err, data) => {
       if (err && err.code !== 'ENOENT') { return reject(err) } else if (err) {
@@ -431,9 +396,21 @@ let createInstancePromise = (install) => {
       }
       Fs.writeFile(`${install.pathFinal}/${CONST.INSTANCE_FOLDER}/${CONST.INSTANCE_FOLDER}.scss`, data, err => {
         if (err) { return reject(err) }
-        return resolve(module)
+        return resolve(install)
       })
     })
+  })
+}
+
+/* generates scss instance input and file */
+let createInstancePromise = (install) => {
+  return new Promise((resolve, reject) => {
+    let promises = []
+    promises.push(createScssInstancePromise(install))
+    // if (install.jsStandard === 'modular') { promises.push(createModularInstancePromise(install, install.current.modularContent)) }
+    Promise.all(promises)
+    .then(() => resolve(install))
+    .catch(reject)
   })
 }
 
@@ -549,22 +526,6 @@ let updateUsedFilesPromise = (use) => {
       return resolve(use)
     })
     .catch(reject)
-  })
-}
-
-/* turns a scss file into a css file and removes scss files + map */
-let convertScssToCss = (input, output) => {
-  return new Promise((resolve, reject) => {
-    Sass.render({
-      file: input,
-      outFile: output
-    }, function (err, result) {
-      if (err) { return reject(err) }
-      Fs.writeFile(output, result.css, err => {
-        if (err) { return reject(err) }
-        return resolve(output)
-      })
-    })
   })
 }
 
@@ -727,6 +688,16 @@ let updateRegistryModulesPromise = (item) => {
   })
 }
 
+/* modify only first letter with upper case */
+let firstLetterUpperCase = (str) => {
+  return str && str.length ? `${str[0].toUpperCase()}${str.substring(1)}` : str
+}
+
+/* modify only first letter with lower case */
+let firstLetterLowerCase = (str) => {
+  return str && str.length ? `${str[0].toLowerCase()}${str.substring(1)}` : str
+}
+
 module.exports = {
   getCurrentPath,
   getJsonFilePromise,
@@ -748,7 +719,6 @@ module.exports = {
   defineMixinName,
   findAllImportInString,
   updateUsedFilesPromise,
-  convertScssToCss,
   displayMessagesPromise,
   tgzFilePromise,
   createSymlinkPromise,
@@ -759,5 +729,8 @@ module.exports = {
   optionList,
   fileExistsPromise,
   checkCorrectResponsiveness,
-  FolderCopyPromise
+  FolderCopyPromise,
+  findModulesPromise,
+  firstLetterUpperCase,
+  firstLetterLowerCase
 }

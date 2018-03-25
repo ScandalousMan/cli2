@@ -1,5 +1,7 @@
 let Fs = require('fs')
+let Path = require('path')
 let Acorn = require('acorn')
+let Common = require('../../../lib/common')
 let Debug = require('../../../lib/debug')
 let CONST = require('../../../lib/const')
 
@@ -38,6 +40,156 @@ let fileCheckerPromise = (publish) => {
   })
 }
 
+/* LEGACY: gets the file and splits it to integrate sub dependencies inside */
+let splitsLegacyFilePromise = (install) => {
+  if (install.debug) { console.log('>> ( js)', `analyzing ${install.target}/${install.files.script}`) }
+  return new Promise((resolve, reject) => {
+    Fs.readFile(`${install.target}/${install.files.script}`, 'utf8', (err, data) => {
+      if (err) { return reject(err) }
+      let cut = data.indexOf('spm_self) {\n') + 'spm_self) {\n'.length
+      if (cut === -1 + 'spm_self) {\n'.length) { return reject(new Error(`incorrect pattern in downloaded ${install.name}@${install.version}`)) }
+      install.jsContent.header = data.substring(0, cut)
+      install.jsContent.footer = data.substring(cut)
+      let prefix = ''
+      for (let dependency of install.children) {
+        prefix += `${dependency.jsContent.header}${dependency.jsContent.footer}\n`
+      }
+      if (prefix.length) {
+        install.jsContent.footer = `${prefix}${install.jsContent.footer}`
+        Fs.writeFile(`${install.target}/${install.files.script}`, `${install.jsContent.header}${install.jsContent.footer}`, err => {
+          if (err) { return reject(err) }
+          if (install.debug) { console.log(`>> ( js) updating ${install.target}/${install.files.script}`) }
+          return resolve(install)
+        })
+      } else { return resolve(install) }
+    })
+  })
+}
+
+/* processes the javascript part of the instances */
+let processInstancesPromise = (install) => {
+  if (install.debug) { Debug() }
+  return new Promise((resolve, reject) => {
+    Fs.readFile(`${install.path || install.pathFinal}/${CONST.INSTANCE_FOLDER}/${CONST.INSTANCE_FOLDER}.js`, 'utf8', (err, data) => {
+      if (err && err.code !== 'ENOENT') { return reject(err) } else if (err) {
+        data = ''
+      }
+      let tmpData = data
+      if (install.jsStandard === 'legacy') {
+        for (let dependency of install.children) {
+          if (dependency.added) {
+            let parameters = []
+            for (let instanceVar of dependency.jsonFile.js.instancesVar) { parameters.push(instanceVar.value) }
+            data += `let ${dependency.lowerName} = new ${dependency.upperName}(${parameters.join(',')})\n`
+          }
+        }
+      } else {
+        for (let dependency of install.children) {
+          if (dependency.added) {
+            let parameters = []
+            for (let instanceVar of dependency.jsonFile.js.instancesVar) { parameters.push(instanceVar.value) }
+            data = `import { ${dependency.upperName} } from '../spm_modules/${dependency.name}/${dependency.files.script}'\n${data}`
+            data += `export let ${dependency.lowerName} = new ${dependency.upperName}(${parameters.join(',')})\n`
+          }
+        }
+      }
+      if (data !== tmpData) {
+        Fs.writeFile(`${install.path || install.pathFinal}/${CONST.INSTANCE_FOLDER}/${CONST.INSTANCE_FOLDER}.js`, data, err => {
+          if (err) { return reject(err) }
+          if (install.debug) { console.log('>> ( js) updating', `${install.path || install.pathFinal}/${CONST.INSTANCE_FOLDER}/${CONST.INSTANCE_FOLDER}.js`) }
+          return resolve(install)
+        })
+      } else { return resolve(install) }
+    })
+  })
+}
+
+/* complete process for sub-dependencies in modular mode */
+let processSubInstancesModularPromise = (install) => {
+  if (install.debug) { Debug() }
+  return new Promise((resolve, reject) => {
+    Fs.readFile(`${install.path}/${CONST.INSTANCE_FOLDER}/${CONST.INSTANCE_FOLDER}.js`, 'utf8', (err, data) => {
+      if (err) { return reject(err) }
+      let parsed = Acorn.parse(data)
+      for (let index = parsed.length - 1; index >= 0; index--) {
+        let item = parsed[index]
+        if (item.type === 'VariableDeclaration') {
+          data = `${data.substring(0, item.start)}export ${data.substring(item.start)}`
+        }
+      }
+      for (let dependency of install.children) {
+        data = `import { ${dependency.upperName} } from '../spm_modules/${dependency.name}/${dependency.files.script}'\n${data}`
+      }
+      Fs.writeFile(`${install.path}/${CONST.INSTANCE_FOLDER}/${CONST.INSTANCE_FOLDER}.js`, data, err => {
+        if (err) { return reject(err) }
+        return resolve(install)
+      })
+    })
+  })
+}
+
+/* imports all dependencies from instance file and exports the class */
+let processModularDependenciesPromise = (install) => {
+  if (install.debug) { Debug() }
+  return new Promise((resolve, reject) => {
+    Fs.readFile(`${install.path || install.pathFinal}/${install.files.script}`, 'utf8', (err, data) => {
+      if (err && err.code !== 'ENOENT') { return reject(err) }
+      if (install.path) {
+      // case sub-dependency : exporting the class
+        data = `export ${data}`
+        if (install.children.length) {
+          let dependencies = []
+          for (let dependency of install.children) {
+            dependencies.push(`${dependency.lowerName}`)
+          }
+          let path = Path.relative(Path.dirname(`${install.path}/${install.files.script}`), `${install.path}/${CONST.INSTANCE_FOLDER}/${CONST.INSTANCE_FOLDER}.js`)
+          data = `import { ${dependencies.join(', ')} } from '${path}'\n\n${data}`
+        }
+      } else {
+      // case top lvl dependencies
+        let path = Path.relative(Path.dirname(`${install.pathFinal}/${install.files.script}`), `${install.pathFinal}/${CONST.INSTANCE_FOLDER}`)
+        let regex = new RegExp(`import {.{1,}} from '${path}/spm_instances'\n`)
+        let details = regex.exec(data)
+        let extract
+        if (details && details.index !== undefined) {
+          let startIndex = data.indexOf('{', details.index)
+          let endIndex = data.indexOf('}', details.index)
+          extract = data.substring(startIndex + 2, endIndex - 1).split(', ')
+          for (let name of install.names) {
+            let lowerName = Common.firstLetterLowerCase(name)
+            if (!extract.includes(lowerName)) { extract.push(lowerName) }
+          }
+          data = `${data.substring(0, startIndex + 2)}${extract.join(', ')}${data.substring(endIndex - 1)}`
+        } else {
+          extract = []
+          for (let name of install.names) {
+            let lowerName = Common.firstLetterLowerCase(name)
+            if (!extract.includes(lowerName)) { extract.push(lowerName) }
+          }
+          data = `import { ${extract.join(', ')} } from '${path}/spm_instances'\n\n${data}`
+        }
+      }
+      Fs.writeFile(`${install.path || install.pathFinal}/${install.files.script}`, data, err => {
+        if (err) { return reject(err) }
+        if (install.debug) { console.log('>> ( js) updating', `${install.path || install.pathFinal}/${install.files.script}`) }
+        return resolve(install)
+      })
+    })
+  })
+}
+
+/* creates or updates the adequate js instance file */
+let generateInstancePromise = (generate) => {
+  return new Promise((resolve, reject) => {
+    return resolve(generate)
+  })
+}
+
 module.exports = {
-  fileCheckerPromise
+  fileCheckerPromise,
+  processSubInstancesModularPromise,
+  processInstancesPromise,
+  splitsLegacyFilePromise,
+  processModularDependenciesPromise,
+  generateInstancePromise
 }
