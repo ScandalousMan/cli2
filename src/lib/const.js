@@ -39,7 +39,7 @@ module.exports = {
   PACKAGE_ORIGIN_URL: `${BASE_URL}/package-origin`,
   LOGIN_URL: `${BASE_URL}/user`,
   PREFERENCES: 'api.spm-style.com',
-  // SEARCH_RESULTS: 20,
+  SEARCH_RESULTS: 20,
   PROJECT_JSON_NAME: 'project-spm.json',
   MODULE_JSON_NAME: 'module-spm.json',
   INSTANCE_FOLDER: 'spm_instances',
