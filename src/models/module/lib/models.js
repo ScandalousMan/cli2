@@ -117,6 +117,7 @@ class Install {
     this.directoryList = []
     this.warnings = []
     this.successes = []
+    this.addedNumber = 0
     this.debug = options.debug === true // || CONST.DEBUG
   }
   /* creates a list of dependencies if install has args */

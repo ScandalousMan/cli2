@@ -6,7 +6,7 @@ let printArborescence = (action, settings) => {
   if (action.debug) { Debug() }
   if (settings.results.length) {
     settings.maxLen += 6
-    let final = 'The following module has been added:'
+    let final = action.addedNumber ? `The following ${action.addedNumber > 1 ? 'modules have' : 'module has'} been added:` : `List of modules:`
     let indicator = 0
     for (let line of settings.results) {
       final = `${final}\n${line.text}`

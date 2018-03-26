@@ -112,6 +112,7 @@ let getJsonPackageFromAPIPromise = (install) => {
         for (let dependency of body.dependencies) {
           install.dependencies[dependency.name] = dependency.version
         }
+        install.jsonFile.dependencies = install.dependencies // added
         install.files = body.files
         install.version = body.version
         return resolve(install)
@@ -285,6 +286,7 @@ let installDependencyPromise = (install) => {
         }
       } else {
         install.added = true
+        install.addedNumber++
         install.downloadList.push({ name: install.name, version: install.version, path: install.path || install.pathFinal })
         if (install.debug) { console.log('>> downloading:', `${install.name}@${install.version}`, 'in', install.target) }
         Common.downloadModuleSpmPromise(install.name, install.version, install.target)
@@ -325,7 +327,6 @@ let installDependenciesPromise = (install, topDependency = true) => {
   return new Promise((resolve, reject) => {
     let promises = []
     if (Object.keys(install.dependencies).length) {
-      console.log('dePbN', install.dependencies)
       Fs.mkdir(`${install.path || install.pathFinal}/spm_modules`, err => {
         if (err && err.code !== 'EEXIST') { return reject(err) }
         if (install.debug) { console.log('>> mkdir', `${install.path || install.pathFinal}/spm_modules`) }
@@ -420,6 +421,7 @@ module.exports = (Program) => {
       .then(installDependenciesPromise)
       .then(initInstancesPromise)
       .then(cssFilesConvertionPromise)
+      // save function
       .then(Tree.prepareTreeDisplayPromise)
       .then(Common.displayMessagesPromise)
       .then(resolve)
