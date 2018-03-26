@@ -362,6 +362,7 @@ let installDependenciesPromise = (install, topDependency = true) => {
 
 /* generates spm_instances folder and files */
 let initInstancesPromise = (install) => {
+  if (install.debug) { Debug() }
   return new Promise((resolve, reject) => {
     Fs.mkdir(`${install.pathFinal}/${CONST.INSTANCE_FOLDER}`, err => {
       if (err && err.code !== 'EEXIST') { return reject(err) }
@@ -396,6 +397,31 @@ let cssFilesConvertionPromise = (install) => {
   })
 }
 
+/* saves new dependencies in module's json file */
+let processSavedModulesPromise = (install) => {
+  if (install.debug) { Debug() }
+  return new Promise((resolve, reject) => {
+    if (!install.isSave) { return resolve(install) }
+    for (let child of install.children) {
+      install.jsonFile.dependencies[child.name] = child.version
+    }
+    let dependencies = []
+    for (let dependency in install.jsonFile.dependencies) {
+      dependencies.push(dependency)
+    }
+    dependencies.sort()
+    let newDependencies = {}
+    for (let dependency of dependencies) {
+      newDependencies[dependency] = install.jsonFile.dependencies[dependency]
+    }
+    Fs.writeFile(`${install.pathFinal}/${CONST.MODULE_JSON_NAME}`, JSON.stringify(install.jsonFile, null, '  '), err => {
+      if (err) { return reject(err) }
+      install.successes.push(`${CONST.MODULE_JSON_NAME} updated with installed dependencies`)
+      return resolve(install)
+    })
+  })
+}
+
 /* PROJECT INSTALL : to use a specific module as a dependency */
 module.exports = (Program) => {
   return new Promise((resolve, reject) => {
@@ -421,7 +447,7 @@ module.exports = (Program) => {
       .then(installDependenciesPromise)
       .then(initInstancesPromise)
       .then(cssFilesConvertionPromise)
-      // save function
+      .then(processSavedModulesPromise)
       .then(Tree.prepareTreeDisplayPromise)
       .then(Common.displayMessagesPromise)
       .then(resolve)
