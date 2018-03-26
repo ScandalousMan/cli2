@@ -62,7 +62,7 @@ let createModulePromise = (create) => {
       jsStandard: {
         name: 'jsStandard',
         type: 'list',
-        choice: ['modular', 'legacy'],
+        choices: ['modular', 'legacy'],
         default: 'modular',
         message: 'chose your js standard : legacy only recommended for native script'
       },

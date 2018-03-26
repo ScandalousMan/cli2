@@ -96,7 +96,7 @@ let getDependenciesInstallPromise = (install) => {
 
 /* requests the spm registry for a package's json file */
 let getJsonPackageFromAPIPromise = (install) => {
-  if (install.debug) { Debug(install) }
+  if (install.debug) { Debug() }
   return new Promise((resolve, reject) => {
     let url = `${CONST.PACKAGE_URL}/install/${install.name}`
     if (install.version && install.version !== true) { url += `?version=${install.version}` }
@@ -286,7 +286,7 @@ let installDependencyPromise = (install) => {
         }
       } else {
         install.added = true
-        install.addedNumber++
+        install.stats.addedNumber++
         install.downloadList.push({ name: install.name, version: install.version, path: install.path || install.pathFinal })
         if (install.debug) { console.log('>> downloading:', `${install.name}@${install.version}`, 'in', install.target) }
         Common.downloadModuleSpmPromise(install.name, install.version, install.target)
@@ -414,6 +414,7 @@ let processSavedModulesPromise = (install) => {
     for (let dependency of dependencies) {
       newDependencies[dependency] = install.jsonFile.dependencies[dependency]
     }
+    install.jsonFile.dependencies = newDependencies
     Fs.writeFile(`${install.pathFinal}/${CONST.MODULE_JSON_NAME}`, JSON.stringify(install.jsonFile, null, '  '), err => {
       if (err) { return reject(err) }
       install.successes.push(`${CONST.MODULE_JSON_NAME} updated with installed dependencies`)

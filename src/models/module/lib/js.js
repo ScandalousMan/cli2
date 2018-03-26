@@ -32,9 +32,41 @@ let fileCheckerPromise = (publish) => {
   return new Promise((resolve, reject) => {
     Fs.readFile(`${publish.path}/${publish.json.files.script}`, 'utf8', (err, data) => {
       if (err) { return reject(err) }
+      if (publish.json.jsStandard === 'modular') {
+        let modularParsed = Acorn.parse(data, { sourceType: 'module' })
+        for (let index = modularParsed.body.length - 1; index >= 0; index--) {
+          let item = modularParsed.body[index]
+          if (item.type === 'ImportDeclaration') {
+            for (let info of item.specifiers) {
+              if (info.type !== 'ImportSpecifier') { return reject(new Error(`to publish for spm, you must import only spm modules - ${info.local.name} found`)) }
+            }
+            // import declaration are simply deleted (spm_modules, spm_instances or other)
+            data = `${data.substring(0, item.start)}${data.substring(item.end + 1)}`
+          } else if (item.type === 'ExportNamedDeclaration') {
+            if (item.declaration) {
+              for (let subItem of item.declaration.declarations) {
+                if (!subItem.id.name.startsWith('$$_')) {
+                  return reject(new Error(`exported variable ${subItem.id.name} not starting with $$_`))
+                } else { data = `${data.substring(0, item.start)}${data.substring(item.end + 1)}` }
+              }
+            } else {
+              return reject(new Error(`exported value must be declared in the export as a variable starting with ${'$$_'}`))
+            }
+          } else if (item.type.startsWith('Export') && item.type.endsWith('Declaration')) {
+            return reject(new Error(`exported value must be declared in the export as a variable starting with ${'$$_'}`))
+          }
+        }
+      }
       publish.jsData = data
       parseProcessPromise(publish)
-      .then(resolve)
+      .then(() => {
+        if (publish.json.jsStandard === 'modular') {
+          Fs.writeFile(`${publish.path}/.tmp_spm/${publish.json.files.script}`, data, err => {
+            if (err) { return reject(err) }
+            return resolve(publish)
+          })
+        } else { return resolve(publish) }
+      })
       .catch(reject)
     })
   })
