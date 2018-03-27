@@ -8,12 +8,12 @@ for (let action in Actions){
 }
 
 Program
-.command('help', `to display program's help`, {isDefault: true})
+.command('*', '', {noHelp: true, isDefault: true})
 .action(() => {
-	Program.help()
+  Program.help()
 })
 .parse(process.argv)
 
-if (Program.args.length === 0) {
+if (!Program.args || Program.args.length === 0) {
   Program.help()
 }
