@@ -215,12 +215,6 @@ let createModuleFilePromise = (create) => {
         toCreate: true,
         toForce: false,
         content: ''
-      },
-      {
-        name: `const-spm.js`,
-        toCreate: true,
-        toForce: false,
-        content: ''
       }
     ]
     let promises = []

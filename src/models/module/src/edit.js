@@ -119,7 +119,7 @@ let modifyVariableJsonPromise = (edit) => {
           script: optionsToChange.jsName || edit.json.files.script,
           style: optionsToChange.ssName || edit.json.files.style
         },
-        classes: optionsToChange.classes || edit.json.classes,
+        classes: optionsToChange.classes ? optionsToChange.classes.concat(edit.json.classes) : edit.json.classes,
         readme: optionsToChange.readme || edit.json.readme,
         repository: optionsToChange.repository || edit.json.repository,
         license: optionsToChange.license || edit.json.license,

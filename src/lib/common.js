@@ -193,8 +193,9 @@ let promptConfirmation = (res, defaultValue = false, text = 'Is this ok ?') => {
     }])
     .then(answer => {
       if (!answer.confirmation) { return reject(new Error('Aborted by user')) }
-      resolve(res)
+      return resolve(res)
     })
+    .catch(reject)
   })
 }
 

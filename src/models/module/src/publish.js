@@ -11,6 +11,7 @@ let Debug = require('../../../lib/debug')
 let Common = require('../../../lib/common')
 let Spinner = require('../../user/lib/spinner')
 let Authentify = require('../../user/lib/authentify')
+let Preferences = require('preferences')
 
 /* Detect if in the scope of a project */
 let testProjectScopePromise = (publish) => {
@@ -283,14 +284,10 @@ let prepareWorkspacePromise = (publish) => {
 let checkModuleFilesPromise = (publish) => {
   if (publish.debug) { Debug() }
   return new Promise((resolve, reject) => {
-    let promises = []
-    promises.push(Html.fileCheckerPromise(publish))
-    promises.push(Css.fileCheckerPromise(publish))
-    promises.push(Js.fileCheckerPromise(publish))
-    Promise.all(promises)
-    .then(() => {
-      return resolve(publish)
-    })
+    Html.fileCheckerPromise(publish)
+    .then(Css.fileCheckerPromise)
+    .then(Js.fileCheckerPromise)
+    .then(() => resolve(publish))
     .catch(reject)
   })
 }
@@ -313,6 +310,16 @@ let promptUserPromise = (publish) => {
   return new Promise((resolve, reject) => {
     Authentify.getSpmAPIToken('login')
     .then(token => {
+      // checking classes' names
+      let login = new Preferences(CONST.PREFERENCES)
+      let incorrectClasses = []
+      let moduleName = publish.name.includes('_') ? publish.name : `${login}_${publish.name}`
+      for (let moduleClass of publish.json.classes) {
+        if (moduleClass.includes('_') && moduleClass !== moduleName && !moduleClass.startsWith(`${moduleName}-`)) {
+          incorrectClasses.push(moduleClass)
+        }
+      }
+      if (incorrectClasses.length) { return reject(new Error(`incorrect classes found : ${incorrectClasses.join(', ')} - cannot contain underscore (_)`)) }
       publish.token = token
       return resolve(publish)
     })

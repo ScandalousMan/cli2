@@ -7,6 +7,7 @@ let Common = require('../../../lib/common')
 let CONST = require('../../../lib/const')
 
 const SCSS_IGNORED_CHARS = [' ', '\n', '\t']
+const SCSS_END_CHARS = [' ', '\n', '\t', '.', '[', '{', '&', ':', ',', ';']
 
 /* whitespaces cleaner for strings */
 let removeWhitespaces = (str) => {
@@ -61,7 +62,7 @@ let parseSelector = (selector, classes, dependenciesMap) => {
   for (let moduleClass of allClasses) {
     let i = item.indexOf('.' + moduleClass)
     if (i >= 0 &&
-      ((i + moduleClass.length + 1 === item.length) || [' ', '\n', '\t', '.', '[', '{', '&', ':', ',', ';'].includes(item[i + moduleClass.length + 1]))) {
+      ((i + moduleClass.length + 1 === item.length) || SCSS_END_CHARS.includes(item[i + moduleClass.length + 1]))) {
       return item
     }
   }
@@ -100,16 +101,51 @@ let checkClass = (file, data, publish) => {
       }
       startIndex++
     }
+    let undeclaredClasses = []
+    let unscopedSelectors = []
+    let usedClasses = {}
+    let acceptedClasses = tmpClasses.concat(Object.keys(publish.dependenciesClassesMapping))
     while ((i = data.indexOf('{', startIndex)) >= 0) {
       j = data.indexOf('@media', startIndex)
       if (j < 0 || i < j) {
         if (!parseSelectors(data.substring(startIndex, i), tmpClasses, publish.dependenciesClassesMapping) && Common.cleanValue(data.substring(startIndex, i)) !== ':root') {
           // convert in css before making any check
-          // return reject(new Error(`incorrect selector found : ${data.substring(startIndex, i)} in ${file}`))
+          unscopedSelectors.push({ value: Common.cleanValue(data.substring(startIndex, i)), file })
         }
+        // checks the use of undeclared classes
+        for (let selector of data.substring(startIndex, i).split(',')) {
+          selector = Common.cleanValue(selector)
+          let selectorStartIndex = -1
+          while ((selectorStartIndex = selector.indexOf('.', selectorStartIndex + 1)) !== -1) {
+            let selectorStopIndex = selectorStartIndex + 1
+            while (selectorStopIndex !== selector.length && !SCSS_END_CHARS.includes(selector[selectorStopIndex])) {
+              selectorStopIndex++
+            }
+            let subSelector = selector.substring(selectorStartIndex + 1, selectorStopIndex)
+            if (!acceptedClasses.includes(subSelector)) { undeclaredClasses.push(subSelector) } else { usedClasses[subSelector] = true }
+          }
+        }
+
         i = data.indexOf('}', i)
       }
       startIndex = i + 1
+    }
+    publish.unusedClasses = {}
+    for (let projectClass of publish.json.classes) {
+      if (!usedClasses[projectClass]) { publish.unusedClasses[projectClass] = true }
+    }
+    if (undeclaredClasses.length + unscopedSelectors.length) {
+      let errorMessage = ''
+      if (unscopedSelectors.length) {
+        errorMessage = 'incorrect selectors found :\n'
+        for (let unscopedSelector of unscopedSelectors) {
+          errorMessage += `- ${unscopedSelector.value} in file ${unscopedSelector.file}\n`
+        }
+      }
+      if (undeclaredClasses.length) {
+        errorMessage += `undeclared classes found : ${undeclaredClasses.join(', ')}\n=> use spm module edit --classes '${undeclaredClasses.join(',')}'`
+      }
+      return reject(new Error(errorMessage))
     }
     return resolve(publish)
   })
@@ -143,26 +179,22 @@ let recursiveCheckModule = (filePath, publish) => {
     Fs.readFile(filePath, 'utf8', (err, data) => {
       if (err) { return reject(err) }
       publish.ressources.push(filePath)
-      checkClass(filePath, data, publish)
-      .then(() => {
-        let dataAt = data.split('@import ')
-        let dataAtClose = []
-        for (let elem of dataAt) {
-          if (elem.indexOf(';') >= 0) {
-            let resultFile = importToFile(elem.split(';')[0])
-            if (resultFile && !resultFile.startsWith('http')) {
-              dataAtClose.push(resultFile)
-            }
+      let dataAt = data.split('@import ')
+      let dataAtClose = []
+      for (let elem of dataAt) {
+        if (elem.indexOf(';') >= 0) {
+          let resultFile = importToFile(elem.split(';')[0])
+          if (resultFile && !resultFile.startsWith('http')) {
+            dataAtClose.push(resultFile)
           }
         }
-        let promises = []
-        for (let module of dataAtClose) {
-          promises.push(recursiveCheckModule(`${filePath.substring(0, filePath.lastIndexOf('/'))}/${module}`, publish))
-        }
-        Promise.all(promises)
-        .then(() => { return resolve(publish) })
-        .catch(reject)
-      })
+      }
+      let promises = []
+      for (let module of dataAtClose) {
+        promises.push(recursiveCheckModule(`${filePath.substring(0, filePath.lastIndexOf('/'))}/${module}`, publish))
+      }
+      Promise.all(promises)
+      .then(() => { return resolve(publish) })
       .catch(reject)
     })
   })
@@ -172,8 +204,8 @@ let recursiveCheckModule = (filePath, publish) => {
 let scssToCssForCheck = (publish) => {
   if (publish.debug) { Debug() }
   return new Promise((resolve, reject) => {
-    if (publish.style === 'scss') {
-      Fs.writeFile(`${publish.path}/.tmp_spm/.sass_spm/style.scss`, `@import '../tmp/${publish.json.files.style}';`, err => {
+    if (publish.json.style === 'scss') {
+      Fs.writeFile(`${publish.path}/.tmp_spm/.sass_spm/style.scss`, `@import '../${publish.json.files.style}';`, err => {
         if (err) { return reject(err) }
         Sass.render({
           file: `${publish.path}/.tmp_spm/.sass_spm/style.scss`,
@@ -182,15 +214,22 @@ let scssToCssForCheck = (publish) => {
           if (!error) {
             Fs.writeFile(`${publish.path}/.tmp_spm/.sass_spm/result.css`, result.css, function (err) {
               if (!err) {
-                checkClass(`${publish.path}/.tmp_spm/.sass_spm/result.css`, result.css, publish)
-                .then(() => { return resolve(publish) })
+                checkClass(`${publish.path}/.tmp_spm/.sass_spm/result.css`, result.css.toString(), publish)
+                .then(() => resolve(publish))
                 .catch(reject)
               } else { return reject(new Error('error while converting scss file to css')) }
             })
           } else { return reject(error.message) } // node-sass error message
         })
       })
-    } else { return resolve(publish) }
+    } else {
+      Fs.readFile(`${publish.path}/.tmp_spm/${publish.json.files.style}`, 'utf8', (err, data) => {
+        if (err) { return reject(err) }
+        checkClass(`${publish.path}/.tmp_spm/${publish.json.files.style}`, data, publish)
+        .then(() => resolve(publish))
+        .catch(reject)
+      })
+    }
   })
 }
 
