@@ -188,7 +188,7 @@ let processIgnoredFilesPromise = (publish) => {
   return new Promise((resolve, reject) => {
     parseIgnoreFilePromise(publish)
     .then(ignoredFiles => {
-      publish.ignores = ['.tmp_spm', '.gitignore', '.npmignore', 'module-spm.json', `${publish.json.files.index}`, `spm_modules`].concat(ignoredFiles)
+      publish.ignores = ['.tmp_spm', '.gitignore', '.npmignore', 'module-spm.json', `${publish.json.files.index}`].concat(ignoredFiles)
       return resolve(publish)
     })
     .catch(reject)
@@ -237,15 +237,6 @@ let publicationCopyPromise = (publish) => {
   return new Promise((resolve, reject) => {
     Common.FolderCopyPromise(publish.path, `${publish.path}/.tmp_spm`, file => {
       for (let ignoredFile of publish.ignores) { if (Path.relative(file, `${publish.path}/${ignoredFile}`) === '') { return false } }
-      let relativePath = Path.relative(`${publish.path}/spm_modules`, file)
-      if (!relativePath.startsWith('..') && relativePath !== '') {
-        for (let dependency in publish.dependencies) {
-          if (Path.relative(`${publish.path}/spm_modules/${dependency}`, file).startsWith('..')) {
-            return true
-          }
-        }
-        return false
-      }
       return true
     })
     .then(() => {
@@ -292,14 +283,55 @@ let checkModuleFilesPromise = (publish) => {
   })
 }
 
+/* verifies the publication has no missing information  */
+let checkPublicationContent = (publish) => {
+  if (publish.debug) { Debug() }
+  return new Promise((resolve, reject) => {
+    if (publish.json.mainClass.includes('-')) { return reject(new Error(`main class cannot include any '-' character`)) }
+    publish.apiPackage = {
+      name: publish.name,
+      version: publish.version,
+      type: publish.json.type,
+      style: publish.json.style,
+      mainClass: publish.json.mainClass,
+      classes: publish.json.classes,
+      description: publish.json.description,
+      ssEntry: publish.json.files.style,
+      jsEntry: publish.json.files.script,
+      dependencies: publish.json.dependencies,
+      repository: publish.json.repository,
+      readme: publish.json.readme,
+      keywords: publish.json.keywords,
+      license: publish.json.license,
+      dom: {type: 'custom', value: publish.dom},
+      responsiveness: publish.json.responsive,
+      category: publish.json.category,
+      jsImports: publish.jsImports
+    }
+    let incorrectKeys = []
+    for (let key in publish.apiPackage) {
+      if (!publish.apiPackage[key] && !['responsiveness'].includes(key)) {
+        incorrectKeys.push(key)
+      }
+    }
+    if (publish.apiPackage.responsiveness && !publish.apiPackage.responsiveness.length) { incorrectKeys.push('responsive') }
+    if (incorrectKeys.length) { return reject(new Error(`missing information: ${incorrectKeys.join(', ')} - please use spm module edit to update them`)) }
+    return resolve(publish)
+  })
+}
+
 /* Displays the publication and asks the publisher for final confirmation */
 let confirmationPublishPromise = (publish) => {
   if (publish.debug) { Debug() }
   return new Promise((resolve, reject) => {
     if (publish.force) { return resolve(publish) }
-    console.log(`You are about to publish the module ${publish.name}@${publish.version}\nif you have the rights to publish, your contribution will be added in spm registry`)
-    Common.promptConfirmation(publish, true, 'Do you confirm this ')
-    .then(resolve)
+    checkPublicationContent(publish)
+    .then(() => {
+      console.log(`You are about to publish the module ${publish.name}@${publish.version}\nif you have the rights to publish, your contribution will be added in spm registry`)
+      Common.promptConfirmation(publish, true, 'Do you confirm this ')
+      .then(resolve)
+      .catch(reject)
+    })
     .catch(reject)
   })
 }
@@ -323,7 +355,7 @@ let promptUserPromise = (publish) => {
       publish.token = token
       return resolve(publish)
     })
-    .catch(reject)
+    .catch(err => reject(new Error(`${err} - please use spm user register if it's your first visit`)))
   })
 }
 
@@ -331,15 +363,19 @@ let promptUserPromise = (publish) => {
 let createTgzPromise = (publish) => {
   if (publish.debug) { Debug() }
   return new Promise((resolve, reject) => {
-    Fs.mkdir(`${publish.path}/.tmp_spm_publish`, err => {
-      if (err && err.code !== 'EEXIST') { return reject(err) }
-      Common.tgzFilePromise(`${publish.path}/.tmp_spm`, `${publish.path}/.tmp_spm_publish/${publish.name}.tgz`,
-        (path, stat) => !['.tmp_spm/spm_modules'].includes(path))
-      .then(() => {
-        return resolve(publish)
+    Common.deleteFolderRecursivePromise(`${publish.path}/.tmp_spm/spm_modules`, true)
+    .then(() => {
+      Fs.mkdir(`${publish.path}/.tmp_spm_publish`, err => {
+        if (err && err.code !== 'EEXIST') { return reject(err) }
+        Common.tgzFilePromise(`${publish.path}/.tmp_spm`, `${publish.path}/.tmp_spm_publish/${publish.name}.tgz`,
+          (path, stat) => !['.tmp_spm/spm_modules'].includes(path))
+        .then(() => {
+          return resolve(publish)
+        })
+        .catch(reject)
       })
-      .catch(reject)
     })
+    .catch(reject)
   })
 }
 
@@ -347,28 +383,7 @@ let createTgzPromise = (publish) => {
 let sendPublicationToRegistryPromise = (publish) => {
   if (publish.debug) { Debug() }
   return new Promise((resolve, reject) => {
-    let formData = {
-      package: JSON.stringify({
-        name: publish.name,
-        version: publish.version,
-        type: publish.json.type,
-        style: publish.json.style,
-        mainClass: publish.json.mainClass,
-        classes: publish.json.classes,
-        description: publish.json.description,
-        ssEntry: publish.json.files.style,
-        jsEntry: publish.json.files.script,
-        dependencies: publish.json.dependencies,
-        scripts: publish.json.scripts,
-        repository: publish.json.repository,
-        readme: publish.json.readme,
-        keywords: publish.json.keywords,
-        license: publish.json.license,
-        dom: {type: 'custom', value: publish.dom},
-        responsiveness: publish.json.responsive,
-        category: publish.json.category
-      })
-    }
+    let formData = { package: JSON.stringify(publish.apiPackage) }
     if (publish.debug) console.log('package', formData.package)
     formData.module = Fs.createReadStream(`${publish.path}/.tmp_spm_publish/${publish.name}.tgz`)
     let spinner = new Spinner('sending to registry...', 'monkey')

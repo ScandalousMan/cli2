@@ -10,7 +10,7 @@ let getSpmAPIToken = (action, force = false) => {
   return new Promise((resolve, reject) => {
     let prefs = new Preferences(CONST.PREFERENCES)
     if (!prefs.token || force) {
-      let spinner = new Spinner('login you in...', 'monkey')
+      let spinner = new Spinner(`${action === 'register' ? 'checking if you can join' : 'loging you in'}...`, 'monkey')
       Prompt([
         {
           name: 'name',

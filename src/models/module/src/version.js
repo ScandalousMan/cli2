@@ -88,6 +88,7 @@ let updatePackageSpmPromise = (version) => {
     version.initialVersion = version.jsonFile.version
     let versions = version.jsonFile.version.split('.')
     versions[position] = Number(versions[position]) + 1
+    for (let minorPosition = position + 1; minorPosition < 3; minorPosition++) { versions[minorPosition] = 0 }
     version.jsonFile.version = versions.join('.')
     Common.writeContent(JSON.stringify(version.jsonFile, null, '  ') + '\n', version.pathPackage, '', version)
     .then(version => {

@@ -41,7 +41,7 @@ class Create {
       type: 'native',
       mainClass: name,
       description: '',
-      jsStandard: 'modular',
+      jsStandard: 'legacy',
       category: '',
       responsive: ['mobile', 'phablet', 'tablet', 'laptop', 'screenXl'],
       keywords: [],
@@ -84,6 +84,7 @@ class Publish {
     this.force = options.force || false
     this.access = options.access
     this.htmlChecker = options.htmlChecker
+    this.jsImports = []
     this.warnings = []
     this.successes = []
   }

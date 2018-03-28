@@ -202,13 +202,18 @@ let createModuleFilePromise = (create) => {
         name: create.jsName,
         toCreate: create.options.jsFile,
         toForce: false,
-        content: ''
+        content: `let moduleClasses = {
+  // declare all classes used in javascript even as selectors, for example :
+  // active: 'active',
+  // Select: 'Select'
+  // in javascript, use only moduleClasses.active to target the class active
+}\n`
       },
       {
         name: create.ssName,
         toCreate: create.options.ssFile,
         toForce: false,
-        content: ''
+        content: `@import "variables-spm.${create.style}";\n`
       },
       {
         name: `variables-spm.${create.style}`,

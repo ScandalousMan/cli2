@@ -105,8 +105,10 @@ let checkClass = (file, data, publish) => {
     let unscopedSelectors = []
     let usedClasses = {}
     let acceptedClasses = tmpClasses.concat(Object.keys(publish.dependenciesClassesMapping))
+    let count = 0
     while ((i = data.indexOf('{', startIndex)) >= 0) {
-      j = data.indexOf('@media', startIndex)
+      j = [data.indexOf('@media', startIndex), data.indexOf('@document', startIndex), data.indexOf('@supports', startIndex)].filter(x => x >= 0)
+      j = !j.length ? -1 : Math.min(...j)
       if (j < 0 || i < j) {
         if (!parseSelectors(data.substring(startIndex, i), tmpClasses, publish.dependenciesClassesMapping) && Common.cleanValue(data.substring(startIndex, i)) !== ':root') {
           // convert in css before making any check
@@ -115,19 +117,20 @@ let checkClass = (file, data, publish) => {
         // checks the use of undeclared classes
         for (let selector of data.substring(startIndex, i).split(',')) {
           selector = Common.cleanValue(selector)
-          let selectorStartIndex = -1
-          while ((selectorStartIndex = selector.indexOf('.', selectorStartIndex + 1)) !== -1) {
-            let selectorStopIndex = selectorStartIndex + 1
-            while (selectorStopIndex !== selector.length && !SCSS_END_CHARS.includes(selector[selectorStopIndex])) {
-              selectorStopIndex++
-            }
-            let subSelector = selector.substring(selectorStartIndex + 1, selectorStopIndex)
-            if (!acceptedClasses.includes(subSelector)) { undeclaredClasses.push(subSelector) } else { usedClasses[subSelector] = true }
+          let selectorStartIndex = selector.indexOf('.')
+          let selectorStopIndex = selectorStartIndex + 1
+          while (selectorStopIndex !== selector.length && !SCSS_END_CHARS.includes(selector[selectorStopIndex])) {
+            selectorStopIndex++
           }
+          let subSelector = selector.substring(selectorStartIndex + 1, selectorStopIndex)
+          if (!acceptedClasses.includes(subSelector) && !undeclaredClasses.includes(subSelector)) { undeclaredClasses.push(subSelector) } else { usedClasses[subSelector] = true }
         }
-
         i = data.indexOf('}', i)
-      }
+        while (count) {
+          i = data.indexOf('}', i + 1)
+          count--
+        }
+      } else { count++ }
       startIndex = i + 1
     }
     publish.unusedClasses = {}
@@ -137,7 +140,7 @@ let checkClass = (file, data, publish) => {
     if (undeclaredClasses.length + unscopedSelectors.length) {
       let errorMessage = ''
       if (unscopedSelectors.length) {
-        errorMessage = 'incorrect selectors found :\n'
+        errorMessage = 'incorrect selectors found  - not containing any declared class:\n'
         for (let unscopedSelector of unscopedSelectors) {
           errorMessage += `- ${unscopedSelector.value} in file ${unscopedSelector.file}\n`
         }
@@ -347,7 +350,30 @@ let defineParametersOrderPromise = (install) => {
   })
 }
 
-/*  */
+/* updates main style file with instance import */
+let updateStyleFilePromise = (item) => {
+  return new Promise((resolve, reject) => {
+    Fs.readFile(`${item.pathFinal}/${item.jsonFile.files.style}`, 'utf8', (err, data) => {
+      if (err && err.code !== 'ENOENT') { return reject(err) }
+      let path = Path.relative(Path.dirname(`${item.pathFinal}/${item.jsonFile.files.style}`), `${item.pathFinal}/${CONST.INSTANCE_FOLDER}/${item.jsonFile.style === 'scss' ? CONST.INSTANCE_FOLDER + '.scss' : '.' + CONST.INSTANCE_FOLDER + '.css'}`)
+      if (data.indexOf(`@import "${path}";\n`) === -1) {
+        let startIndex = -1
+        let stopIndex = 0
+        while ((startIndex = data.indexOf('@import', startIndex + 1)) !== -1) {
+          stopIndex = data.indexOf(';', startIndex)
+        }
+        stopIndex = !stopIndex ? stopIndex : stopIndex + 1
+        data = `${data.substring(0, stopIndex)}@import "${path}";\n${data.substring(stopIndex)}`
+        Fs.writeFile(`${item.pathFinal}/${item.jsonFile.files.style}`, data, err => {
+          if (err) { return reject(err) }
+          return resolve(item)
+        })
+      } else { return resolve(item) }
+    })
+  })
+}
+
+/* updates main instance file */
 let processInstancesPromise = (install) => {
   return new Promise((resolve, reject) => {
     Fs.readFile(`${install.pathFinal}/${CONST.INSTANCE_FOLDER}/${CONST.INSTANCE_FOLDER}.scss`, 'utf8', (err, data) => {
@@ -377,7 +403,9 @@ let processInstancesPromise = (install) => {
       Fs.writeFile(`${install.pathFinal}/${CONST.INSTANCE_FOLDER}/${CONST.INSTANCE_FOLDER}.scss`, data, err => {
         if (err) { return reject(err) }
         if (install.debug) { console.log('>> (css) updating', `${install.pathFinal}/${CONST.INSTANCE_FOLDER}/${CONST.INSTANCE_FOLDER}.scss`) }
-        return resolve(install)
+        updateStyleFilePromise(install)
+        .then(resolve)
+        .catch(reject)
       })
     })
   })
@@ -431,12 +459,16 @@ let generateInstancePromise = (generate) => {
               convertScssToCss(`${generate.pathFinal}/${CONST.INSTANCE_FOLDER}/${CONST.INSTANCE_FOLDER}.scss`, `${generate.pathFinal}/${CONST.INSTANCE_FOLDER}/.${CONST.INSTANCE_FOLDER}.css`)
               .then(res => {
                 generate.successes.push(`css instance ${generate.nickname} of module ${generate.moduleName} has been generated`)
-                return resolve(generate)
+                updateStyleFilePromise(generate)
+                .then(resolve)
+                .catch(reject)
               })
               .catch(reject)
             } else {
               generate.successes.push(`scss instance ${generate.nickname} of module ${generate.moduleName} has been generated`)
-              return resolve(generate)
+              updateStyleFilePromise(generate)
+              .then(resolve)
+              .catch(reject)
             }
           })
         })

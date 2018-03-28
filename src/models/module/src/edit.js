@@ -71,6 +71,14 @@ let recursivePropertiesAdderPromise = (obj, table = [], path = '') => {
   })
 }
 
+let updateList = (newList, oldList) => {
+  if (!newList) { return oldList }
+  for (let item of newList) {
+    if (!oldList.includes(item)) { oldList.push(item) }
+  }
+  return oldList
+}
+
 /*  */
 let modifyVariableJsonPromise = (edit) => {
   if (edit.options.debug) { Debug(edit.options.description === '') }
@@ -119,7 +127,7 @@ let modifyVariableJsonPromise = (edit) => {
           script: optionsToChange.jsName || edit.json.files.script,
           style: optionsToChange.ssName || edit.json.files.style
         },
-        classes: optionsToChange.classes ? optionsToChange.classes.concat(edit.json.classes) : edit.json.classes,
+        classes: updateList(optionsToChange.classes, edit.json.classes),
         readme: optionsToChange.readme || edit.json.readme,
         repository: optionsToChange.repository || edit.json.repository,
         license: optionsToChange.license || edit.json.license,

@@ -163,8 +163,20 @@ let htmlSelectersPromise = (domArray, mainClass, all) => {
   })
 }
 
+/* checks first level and complete classes for dependencies */
+let processDomClasses = (dom, obj = { firstLevelClasses: [], allClasses: [] }, topLevel = true) => {
+  for (let subDom of dom) {
+    for (let domClass in subDom.classes) {
+      if (topLevel && !obj.firstLevelClasses.includes(domClass)) { obj.firstLevelClasses.push(domClass) }
+      if (!obj.allClasses.includes(domClass)) { obj.allClasses.push(domClass) }
+    }
+    processDomClasses(subDom.content, obj, false)
+  }
+  return obj
+}
+
 /* checks if html is correct and returns a full dom-tree with classes */
-let htmlProcesserPromise = (filePath, dom, mainClass, validation, all = false) => {
+let htmlProcesserPromise = (item, filePath, dom, mainClass, validation, all = false) => {
   return new Promise((resolve, reject) => {
     let options = {
       format: 'text',
@@ -180,6 +192,19 @@ let htmlProcesserPromise = (filePath, dom, mainClass, validation, all = false) =
         return reject(data.slice(0, -19))
       } else {
         let completeDom = domToInstructions(filePath, dom)
+        let classesDetail = processDomClasses(completeDom)
+        if (!classesDetail.firstLevelClasses.length) { return reject(new Error(`dom must be wrapped in an element using module's main class ${mainClass}`)) }
+        if (!classesDetail.firstLevelClasses.includes(mainClass)) { return reject(new Error(`spm module must be wrapped in main class ${mainClass}`)) }
+        let undeclaredClasses = []
+        for (let firstLevelClass of classesDetail.firstLevelClasses) {
+          if (!item.json.classes.concat(item.json.mainClass).includes(firstLevelClass) && !undeclaredClasses.includes(firstLevelClass)) { undeclaredClasses.push(firstLevelClass) }
+        }
+        if (undeclaredClasses.length) { return reject(new Error(`undeclared classes ${undeclaredClasses.join(', ')} in html file\n=> use spm module edit --classes='${undeclaredClasses.join(',')}'`)) }
+        for (let singleClass of classesDetail.allClasses) {
+          if (singleClass.includes('_') && !Object.keys(item.json.dependencies).includes(singleClass)) {
+            return reject(new Error(`found class ${singleClass} in module - cannot use underscore in class name - remove or declare as spm dependency`))
+          }
+        }
         htmlSelectersPromise(completeDom, mainClass, all)
         .then(result => {
           if (!result.length) { return reject(new Error('main class not found')) }
@@ -192,7 +217,7 @@ let htmlProcesserPromise = (filePath, dom, mainClass, validation, all = false) =
 }
 
 /* finds all html patterns with mainClass */
-let patternFinderPromise = (projectPath, mainClass) => {
+let patternFinderPromise = (item, projectPath, mainClass) => {
   return new Promise((resolve, reject) => {
     Fs.lstat(projectPath, (err, stats) => {
       if (err) { return reject(err) }
@@ -201,7 +226,7 @@ let patternFinderPromise = (projectPath, mainClass) => {
           if (err) { return reject(err) }
           let promises = []
           for (let file of files) {
-            promises.push(patternFinderPromise(`${projectPath}/${file}`, mainClass))
+            promises.push(patternFinderPromise(item, `${projectPath}/${file}`, mainClass))
           }
           Promise.all(promises)
           .then(results => {
@@ -212,7 +237,7 @@ let patternFinderPromise = (projectPath, mainClass) => {
           .catch(reject)
         })
       } else if (projectPath.endsWith('.html')) {
-        validatorPromise(projectPath, mainClass, false, true)
+        validatorPromise(item, projectPath, mainClass, false, true)
         .then(resolve)
         .catch(reject)
       } else { return resolve([]) }
@@ -221,17 +246,16 @@ let patternFinderPromise = (projectPath, mainClass) => {
 }
 
 /* creates a file with a list of html excerpts found + origin files */
-let conflictSolverPromise = (projectPath, mainClass) => {
-  console.log('running conflict', mainClass)
+let conflictSolverPromise = (item, projectPath, mainClass) => {
   return new Promise((resolve, reject) => {
-    patternFinderPromise(projectPath, mainClass)
+    patternFinderPromise(item, projectPath, mainClass)
     .then(resolve)
     .catch(reject)
   })
 }
 
 /* validates the ref-dom.html */
-let validatorPromise = (filePath, mainClass, validation = true, all = false) => {
+let validatorPromise = (item, filePath, mainClass, validation = true, all = false) => {
   return new Promise((resolve, reject) => {
     Fs.readFile(filePath, 'utf8', (err, data) => {
       if (err) { return reject(err) }
@@ -241,7 +265,7 @@ let validatorPromise = (filePath, mainClass, validation = true, all = false) => 
       } else if (!data.length) {
         return resolve([])
       } else {
-        htmlProcesserPromise(filePath, data, mainClass, validation, all)
+        htmlProcesserPromise(item, filePath, data, mainClass, validation, all)
         .then(resolve)
         .catch(err => {
           return reject(new Error(`in file ${filePath}:\n${err}`))
@@ -259,7 +283,7 @@ let fileCheckerPromise = (publish) => {
       if (err && !publish.projectPath) {
         return reject(new Error(`reference html file not found in your module`))
       } else if (err || publish.htmlChecker) {
-        conflictSolverPromise(`${publish.projectPath}`, publish.json.mainClass)
+        conflictSolverPromise(publish, `${publish.projectPath}`, publish.json.mainClass)
         .then(patternList => {
           if (!patternList.length) { return reject(new Error(`main class not found in your project`)) }
           let data = ''
@@ -277,7 +301,7 @@ let fileCheckerPromise = (publish) => {
         })
         .catch(reject)
       } else {
-        validatorPromise(`${publish.path}/${publish.json.files.index}`, publish.json.mainClass)
+        validatorPromise(publish, `${publish.path}/${publish.json.files.index}`, publish.json.mainClass)
         .then(pattern => {
           publish.dom = pattern[0].str
           return resolve(publish)

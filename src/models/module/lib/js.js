@@ -10,6 +10,7 @@ let parseProcessPromise = (publish) => {
   if (publish.debug) { Debug() }
   return new Promise((resolve, reject) => {
     let table = Acorn.parse(publish.jsData)
+    let moduleClassesFound = false
     if (!table.body.length) { return reject(new Error(`missing script in ${publish.json.files.script}`)) }
     for (let item of table.body) {
       if (item.type === 'VariableDeclaration') {
@@ -17,12 +18,19 @@ let parseProcessPromise = (publish) => {
           if (declaration.id.name.startsWith(CONST.INSTANCE_PREFIX) && declaration.init === null) {
             return reject(new Error(`ERROR ${declaration.id.name} type instance const not assigned`))
           }
+          if (declaration.id.name === 'moduleClasses') {
+            moduleClassesFound = true
+          }
         }
       } else if (item.type === 'ExpressionStatement' && item.expression.type === 'AssignmentExpression' && item.expression.left.name.startsWith(CONST.INSTANCE_PREFIX)) {
         return reject(new Error(`ERROR ${item.expression.left.name} type instance const assigned out of declaration`))
       }
     }
-    return resolve(publish)
+    if (!moduleClassesFound) {
+      Common.promptConfirmation({}, false, `no classes used in module's js script found in your module - are you sure to publish ?`)
+      .then(() => resolve(publish))
+      .catch(reject)
+    } else { return resolve(publish) }
   })
 }
 
@@ -41,8 +49,10 @@ let fileCheckerPromise = (publish) => {
           for (let index = modularParsed.body.length - 1; index >= 0; index--) {
             let item = modularParsed.body[index]
             if (item.type === 'ImportDeclaration') {
-              for (let info of item.specifiers) {
-                if (info.type !== 'ImportSpecifier') { return reject(new Error(`to publish for spm, you must import only spm modules - ${info.local.name} found`)) }
+              if (item.source.value.startsWith('http')) { publish.jsImports.push(item.source.value) } else {
+                for (let info of item.specifiers) {
+                  if (info.type !== 'ImportSpecifier') { return reject(new Error(`to publish for spm, you must import only spm modules or http(s) sources - ${info.local.name} found`)) }
+                }
               }
               // import declaration are simply deleted (spm_modules, spm_instances or other)
               data = `${data.substring(0, item.start)}${data.substring(item.end + 1)}`
