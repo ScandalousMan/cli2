@@ -13,7 +13,7 @@ let toCamelCase = (str) => {
   return res
 }
 
-/*  */
+/* function used to prepare the questions used to modify properties */
 let recursivePropertiesAdderPromise = (obj, table = [], path = '') => {
   return new Promise((resolve, reject) => {
     let promises = []

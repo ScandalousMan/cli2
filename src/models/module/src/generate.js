@@ -49,13 +49,8 @@ let parsePackagePromise = (generate) => {
       if (!res) {
         generate.warnings.push(`instance not saved - missing package-spm.json - use spm init`)
       } else {
-        console.log('L|I', res)
-        if (res.style === 'scss') {
-          generate.style = 'scss'
-          // generate.warnings.push(`default style has been set as scss`)
-        }
+        if (res.style === 'scss') { generate.style = 'scss' }
         generate.jsStandard = res.jsStandard
-        // generate.warnings.push(`default js standard has been set as ${res.jsStandard}`)
       }
       return resolve(generate)
     })

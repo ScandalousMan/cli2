@@ -46,7 +46,6 @@ class Create {
     this.successes = []
     this.errors = []
   }
-
   /* keys used in the create prompter */
   getKeys () {
     return ['name', 'style', 'htmlName', 'jsName', 'ssName', 'styleguideName', 'description', 'jsStandard'] // no type

@@ -724,7 +724,6 @@ module.exports = {
   tgzFilePromise,
   createSymlinkPromise,
   updateRegistryModulesPromise,
-  // new
   findProjectJsonPromise,
   findModuleJsonPromise,
   optionList,

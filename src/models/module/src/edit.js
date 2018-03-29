@@ -46,7 +46,7 @@ let toCamelCase = (str) => {
   return res
 }
 
-/*  */
+/* prepares the question object used to ask for modifications */
 let recursivePropertiesAdderPromise = (obj, table = [], path = '') => {
   return new Promise((resolve, reject) => {
     let promises = []
@@ -71,6 +71,7 @@ let recursivePropertiesAdderPromise = (obj, table = [], path = '') => {
   })
 }
 
+/* to add only new elements in a list */
 let updateList = (newList, oldList) => {
   if (!newList) { return oldList }
   for (let item of newList) {
@@ -79,7 +80,7 @@ let updateList = (newList, oldList) => {
   return oldList
 }
 
-/*  */
+/* to modify variables - entry point function */
 let modifyVariableJsonPromise = (edit) => {
   if (edit.options.debug) { Debug(edit.options.description === '') }
   return new Promise((resolve, reject) => {

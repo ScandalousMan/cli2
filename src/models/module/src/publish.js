@@ -184,6 +184,7 @@ let parseIgnoreFilePromise = (publish) => {
   })
 }
 
+/* adds basic ignored files (spm_modules excluded) to .spmignore fileContent */
 let processIgnoredFilesPromise = (publish) => {
   return new Promise((resolve, reject) => {
     parseIgnoreFilePromise(publish)

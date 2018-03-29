@@ -15,22 +15,9 @@ module.exports = {
   DEBUG: process.env.SPM_DEBUG === 'debug',
   SPM_DIRECTORY: `${userDirectory}/.spm`,
   REGISTRY_PATH: `${userDirectory}/.spm/registry`,
-  // WARNING: {
-  //   NO_PACKAGE_SPM: 'no packge-spm.json in your project',
-  //   NO_SPM_MODULES: 'no spm_modules was found in your project - a new spm_modules folder was created in your current directory',
-  //   NO_PACKAGE_IN_GLOBAL_MODULE: 'don\'t find package in global module',
-  //   NO_DEPENDENCIES_IN_PACKAGE: 'no dependencies in package-spm.json',
-  //   NO_SPM_MODULES_IN_REGISTERY: 'no modules was found in registery'
-  // },
   ERROR: {
-    // NO_PACKAGE_SPM: 'you cannot use spm install without any package-spm.json file',
-    // OUT_OF_SCOPE: 'current directory is out of scope',
     SPM_PROJECT_NOT_FOUND: 'spm project not found in repository',
     SPM_MODULE_NOT_FOUND: 'spm module not found in repository'
-    // ALL_READY_EXIST: 'module all ready exist',
-    // NO_PACKAGE_IN_MODULE: 'not module in directory',
-    // NO_SUDO_FOR_GLOBAL: 'need to be exec in sudo for global install',
-    // NO_PACKAGE_TO_INSTALL: 'no dependency found - update dependencies in package-spm.json or add package name or list in your command'
   },
   PUBLISH_URL: `${BASE_URL}/module`,
   REGISTER_URL: `${BASE_URL}/user`,
