@@ -343,9 +343,9 @@ let promptUserPromise = (publish) => {
     Authentify.getSpmAPIToken('login')
     .then(token => {
       // checking classes' names
-      let login = new Preferences(CONST.PREFERENCES)
+      publish.login = new Preferences(CONST.PREFERENCES).login
       let incorrectClasses = []
-      let moduleName = publish.name.includes('_') ? publish.name : `${login}_${publish.name}`
+      let moduleName = publish.name.includes('_') ? publish.name : `${publish.login}_${publish.name}`
       for (let moduleClass of publish.json.classes) {
         if (moduleClass.includes('_') && moduleClass !== moduleName && !moduleClass.startsWith(`${moduleName}-`)) {
           incorrectClasses.push(moduleClass)

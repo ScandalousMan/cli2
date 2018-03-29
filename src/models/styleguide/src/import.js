@@ -6,7 +6,7 @@ module.exports = (Program) => {
     .alias('i')
     .description(`to import a styleguide from a published template`)
     .action(() => {
-      console.log('styleguide import works !')
+      console.log('styleguide feature released soon !')
       return resolve()
     })
   })

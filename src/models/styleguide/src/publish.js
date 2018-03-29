@@ -6,7 +6,7 @@ module.exports = (Program) => {
     .alias('p')
     .description(`to send your styleguide to spm registry`)
     .action(() => {
-      console.log('styleguide publish works !')
+      console.log('styleguide feature released soon !')
       return resolve()
     })
   })

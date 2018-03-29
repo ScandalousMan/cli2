@@ -5,7 +5,7 @@ module.exports = (Program) => {
     .command('unpublish')
     .description(`to remove a styleguide from spm registry`)
     .action(() => {
-      console.log('styleguide unpublish works !')
+      console.log('styleguide feature released soon !')
       return resolve()
     })
   })
